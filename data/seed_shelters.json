@@ -1,0 +1,26 @@
+[
+  {
+    "name": "St. Agnes Community Centre",
+    "lat": 28.6920,
+    "lng": 77.0810,
+    "capacity": 350
+  },
+  {
+    "name": "Millbrook District School",
+    "lat": 28.6615,
+    "lng": 77.1050,
+    "capacity": 520
+  },
+  {
+    "name": "Rivergate Sports Complex",
+    "lat": 28.6480,
+    "lng": 77.0705,
+    "capacity": 900
+  },
+  {
+    "name": "Northhaven Relief Camp",
+    "lat": 28.7220,
+    "lng": 77.0955,
+    "capacity": 1200
+  }
+]

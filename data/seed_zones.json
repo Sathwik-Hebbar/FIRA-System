@@ -1,0 +1,90 @@
+[
+  {
+    "name": "Highridge Plains",
+    "lat": 28.7041,
+    "lng": 77.1025,
+    "rainfall_mm": 12.0,
+    "river_level_m": 1.2,
+    "danger_level_m": 5.5,
+    "elevation_m": 248.0,
+    "drainage_quality": 0.88,
+    "historical_frequency": 0.05
+  },
+  {
+    "name": "Crestwood Uplands",
+    "lat": 28.7310,
+    "lng": 77.0892,
+    "rainfall_mm": 8.5,
+    "river_level_m": 0.9,
+    "danger_level_m": 4.8,
+    "elevation_m": 275.0,
+    "drainage_quality": 0.91,
+    "historical_frequency": 0.03
+  },
+  {
+    "name": "Dryfield Terrace",
+    "lat": 28.7185,
+    "lng": 77.1350,
+    "rainfall_mm": 15.0,
+    "river_level_m": 1.5,
+    "danger_level_m": 6.0,
+    "elevation_m": 231.0,
+    "drainage_quality": 0.82,
+    "historical_frequency": 0.08
+  },
+  {
+    "name": "Millbrook Crossing",
+    "lat": 28.6870,
+    "lng": 77.0740,
+    "rainfall_mm": 58.0,
+    "river_level_m": 3.4,
+    "danger_level_m": 4.5,
+    "elevation_m": 142.0,
+    "drainage_quality": 0.52,
+    "historical_frequency": 0.42
+  },
+  {
+    "name": "Ferndale Flats",
+    "lat": 28.6745,
+    "lng": 77.1180,
+    "rainfall_mm": 72.0,
+    "river_level_m": 3.9,
+    "danger_level_m": 5.0,
+    "elevation_m": 118.0,
+    "drainage_quality": 0.45,
+    "historical_frequency": 0.55
+  },
+  {
+    "name": "Lowerbrook Basin",
+    "lat": 28.6510,
+    "lng": 77.0600,
+    "rainfall_mm": 145.0,
+    "river_level_m": 5.8,
+    "danger_level_m": 4.2,
+    "elevation_m": 68.0,
+    "drainage_quality": 0.18,
+    "historical_frequency": 0.85
+  },
+  {
+    "name": "Silvermarsh Delta",
+    "lat": 28.6390,
+    "lng": 77.0980,
+    "rainfall_mm": 168.0,
+    "river_level_m": 6.3,
+    "danger_level_m": 4.0,
+    "elevation_m": 52.0,
+    "drainage_quality": 0.12,
+    "historical_frequency": 0.92
+  },
+  {
+    "name": "Ravinemouth Shore",
+    "lat": 28.6255,
+    "lng": 77.1420,
+    "rainfall_mm": 192.0,
+    "river_level_m": 7.1,
+    "danger_level_m": 4.5,
+    "elevation_m": 39.0,
+    "drainage_quality": 0.08,
+    "historical_frequency": 0.97
+  }
+]
