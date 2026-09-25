@@ -28,6 +28,11 @@
     .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border); }
     .sidebar-section:last-child { border-bottom: none; flex: 1; }
 
+    #current-risk { display: grid; gap: 8px; }
+    .current-risk-value { font-size: 18px; font-weight: 800; }
+    .current-risk-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+    .current-risk-row span:first-child { color: var(--text-muted); }
+
     /* Simulate controls */
     .simulate-row  { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
     .delta-row     { display: flex; align-items: center; gap: 8px; }
@@ -50,6 +55,7 @@
   </style>
 </head>
 <body>
+<div id="nav"></div>
 
 <div id="loading">
   <div class="spinner"></div>
@@ -74,7 +80,7 @@
     <div id="sidebar">
 
       <!-- Simulate Rain -->
-      <div class="sidebar-section">
+      <div class="sidebar-section ops-only">
         <div class="section-title">Simulate Rainfall</div>
         <select id="zone-select">
           <option value="">Select a zone…</option>
@@ -89,6 +95,12 @@
             🌧 Simulate Rain Rise
           </button>
         </div>
+      </div>
+
+      <!-- Current user risk -->
+      <div class="sidebar-section">
+        <div class="section-title">Current Location</div>
+        <div id="current-risk"><p style="font-size:12px;color:var(--text-muted)">Loading risk…</p></div>
       </div>
 
       <!-- Legend -->
@@ -120,9 +132,12 @@
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="auth.js"></script>
 
 <script>
-  const API = 'http://localhost:8000';
+  // Enforce authentication (any role)
+  const _authUser = window.auth.enforceAuth(null);
+  if (!_authUser) throw new Error('Not authenticated');
 
   // ── Map setup ─────────────────────────────────────────────────────────────
   const map = L.map('map', { zoomControl: false }).setView([28.675, 77.10], 12);
@@ -152,6 +167,38 @@
   let zonesCache = [];    // [{zone, risk}]
   let sheltersCache = []; // [shelter]
 
+  function nearestShelter() {
+    if (!_authUser.latitude || !_authUser.longitude || !sheltersCache.length) return null;
+    return sheltersCache.reduce((nearest, shelter) => {
+      const distance = Math.hypot(shelter.lat - _authUser.latitude, shelter.lng - _authUser.longitude);
+      return !nearest || distance < nearest.distance ? { ...shelter, distance } : nearest;
+    }, null);
+  }
+
+  function renderCurrentRisk() {
+    const target = document.getElementById('current-risk');
+    if (!_authUser.latitude || !_authUser.longitude || !zonesCache.length) return;
+    const nearest = zonesCache.reduce((best, item) => {
+      const distance = Math.hypot(item.zone.lat - _authUser.latitude, item.zone.lng - _authUser.longitude);
+      return !best || distance < best.distance ? { ...item, distance } : best;
+    }, null);
+    const color = levelColor(nearest.risk.level);
+    const shelter = nearestShelter();
+    target.innerHTML = `
+      <div class="current-risk-value" style="color:${color}">${nearest.risk.level}</div>
+      <div class="current-risk-row"><span>Flood Risk</span><strong>${nearest.zone.name}</strong></div>
+      <div class="current-risk-row"><span>Risk Score</span><strong>${nearest.risk.score.toFixed(3)}</strong></div>
+      <div class="current-risk-row"><span>Rainfall</span><strong>${nearest.zone.rainfall_mm} mm</strong></div>
+      <div class="current-risk-row"><span>Warning</span><strong>${nearest.risk.reason}</strong></div>
+      <div class="current-risk-row"><span>Nearest shelter</span><strong>${shelter ? shelter.name : 'No shelter data'}</strong></div>
+      ${shelter ? `<button class="btn btn-ghost" type="button" onclick="showShelter(${shelter.id})">View shelter on map</button>` : ''}`;
+  }
+
+  function showShelter(id) {
+    const shelter = sheltersCache.find(item => item.id === id);
+    if (shelter) map.setView([shelter.lat, shelter.lng], 14);
+  }
+
   // ── Toast ─────────────────────────────────────────────────────────────────
   let _toastTimer;
   function toast(msg, type = 'success') {
@@ -162,18 +209,12 @@
     _toastTimer = setTimeout(() => { el.className = ''; }, 3000);
   }
 
-  // ── Fetch helpers ─────────────────────────────────────────────────────────
-  async function apiFetch(path, opts = {}) {
-    const res = await fetch(API + path, opts);
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.json();
-  }
-
   // ── Load zones + risk ─────────────────────────────────────────────────────
   async function loadZones() {
     const zones = await apiFetch('/zones');
     const risks = await Promise.all(zones.map(z => apiFetch(`/risk/${z.id}`)));
     zonesCache = zones.map((z, i) => ({ zone: z, risk: risks[i] }));
+    renderCurrentRisk();
 
     // Populate dropdown
     const sel = document.getElementById('zone-select');
@@ -241,6 +282,8 @@
   async function loadShelters() {
     sheltersCache = await apiFetch('/shelters');
     shelterLayer.clearLayers();
+    if (!sheltersCache.length) toast('No shelter locations are available right now.', 'error');
+    renderCurrentRisk();
     sheltersCache.forEach(s => {
       const icon = L.divIcon({
         html: `<div style="
@@ -297,7 +340,7 @@
       toast(`${result.name}: +${delta}mm → ${level} (${result.risk.score.toFixed(3)})`, 'success');
       await loadZones(); // refresh map with new data
     } catch (err) {
-      toast('Simulation failed: ' + err.message, 'error');
+      toast(window.auth.errorMessage(err, 'Rainfall simulation is unavailable right now.'), 'error');
     } finally {
       btn.disabled = false;
       btn.textContent = '🌧 Simulate Rain Rise';
@@ -312,6 +355,10 @@
     ov.classList.add('hidden');
     setTimeout(() => ov.remove(), 500);
   })();
+
+  if (_authUser.role === 'citizen') {
+    document.querySelector('.ops-only').style.display = 'none';
+  }
 </script>
 </body>
 </html>

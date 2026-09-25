@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRA – Login</title>
+  <meta name="description" content="Sign in to the FIRA Flood Intelligence & Response Application." />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 50% 0%, rgba(6,182,212,0.16) 0%, transparent 58%),
+                  var(--bg);
+    }
+
+    .login-wrap {
+      width: 100%; max-width: 400px;
+      padding: var(--space-lg);
+    }
+
+    .login-brand {
+      text-align: center; margin-bottom: var(--space-xl);
+    }
+    .login-brand .brand-icon { font-size: 48px; display: block; margin-bottom: 8px; }
+    .login-brand h1 { font-size: 28px; font-weight: 800; margin: 0; }
+    .login-brand p  { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+    .login-eyebrow { color: var(--teal); font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 8px; }
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-xl);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+    }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 600;
+                        color: var(--text-muted); text-transform: uppercase;
+                        letter-spacing: 0.5px; margin-bottom: 6px; }
+    .form-group input {
+      width: 100%; padding: 10px 14px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 14px;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+    }
+    .form-group input:focus { outline: none; border-color: var(--accent); }
+
+    #login-btn {
+      width: 100%; padding: 12px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      border: none; border-radius: var(--radius-sm);
+      color: #fff; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.2s;
+      margin-top: 8px;
+    }
+    #login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    #login-btn:not(:disabled):hover { opacity: 0.9; }
+
+    .error-msg {
+      display: none;
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: var(--radius-sm);
+      color: #f87171;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+    .error-msg.show { display: block; }
+
+    .demo-hint {
+      margin-top: 20px;
+      padding: 14px;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.2);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .demo-hint strong { color: var(--text); display: block; margin-bottom: 8px; font-size: 11px;
+                        text-transform: uppercase; letter-spacing: 0.5px; }
+    .demo-hint .demo-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .demo-hint code { color: #60a5fa; font-size: 11px; }
+    .demo-fill { color: #60a5fa; cursor: pointer; text-decoration: underline; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-brand">
+    <span class="brand-icon">🌊</span>
+    <div class="login-eyebrow">Emergency operations access</div>
+    <h1>FIRA</h1>
+    <p>Flood intelligence and coordinated response</p>
+  </div>
+
+  <div class="login-card">
+    <div id="error-msg" class="error-msg" role="alert"></div>
+
+    <form id="login-form" novalidate>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="you@example.com" autocomplete="email" required />
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <button type="submit" id="login-btn">Login</button>
+    </form>
+
+    <div class="demo-hint">
+      <strong>Demo Credentials</strong>
+      <div class="demo-row">
+        <span>Citizen:</span>
+        <code>citizen@floodguard.demo</code>
+        <span class="demo-fill" onclick="fillCitizen()">Fill</span>
+      </div>
+      <div class="demo-row">
+        <span>Command:</span>
+        <code>command@floodguard.demo</code>
+        <span class="demo-fill" onclick="fillCommand()">Fill</span>
+      </div>
+      <div style="margin-top:6px">Password: <code>Demo@123</code></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = 'http://localhost:8000';
+
+  // If already logged in, redirect
+  (function () {
+    const token = localStorage.getItem('fira_token');
+    const raw = localStorage.getItem('fira_user');
+    if (token && raw) {
+      try {
+        const user = JSON.parse(raw);
+        const now = Math.floor(Date.now() / 1000);
+        if (user.exp && now < user.exp) {
+          redirect(user.role);
+          return;
+        }
+      } catch (_) {}
+    }
+  })();
+
+  function redirect(role) {
+    if (role === 'command_center') {
+      window.location.href = 'command.html';
+    } else {
+      window.location.href = 'index.html';
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+  function hideError() {
+    document.getElementById('error-msg').classList.remove('show');
+  }
+
+  function fillCitizen() {
+    document.getElementById('email').value = 'citizen@floodguard.demo';
+    document.getElementById('password').value = 'Demo@123';
+    hideError();
+  }
+  function fillCommand() {
+    document.getElementById('email').value = 'command@floodguard.demo';
+    document.getElementById('password').value = 'Demo@123';
+    hideError();
+  }
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('login-btn');
+
+    if (!email) { showError('Please enter your email address.'); return; }
+    if (!password) { showError('Please enter your password.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('Please enter a valid email address.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Logging in…';
+
+    try {
+      const res = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error ${res.status}`);
+      }
+
+      const data = await res.json();
+      localStorage.setItem('fira_token', data.access_token);
+      // Decode JWT for local use
+      const payload = JSON.parse(atob(data.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const userObj = { ...data.user, ...payload };
+      localStorage.setItem('fira_user', JSON.stringify(userObj));
+
+      redirect(data.user.role);
+
+    } catch (err) {
+      let msg = err.message || 'Login failed. Please try again.';
+      if (msg.toLowerCase().includes('incorrect') || msg === '401 Unauthorized') {
+        msg = 'Invalid email or password.';
+      } else if (msg.includes('fetch') || msg.includes('NetworkError') || msg.includes('Failed')) {
+        msg = 'Cannot reach server. Is the backend running?';
+      }
+      showError(msg);
+      btn.disabled = false;
+      btn.textContent = 'Login';
+    }
+  });
+</script>
+</body>
+</html>

@@ -103,9 +103,17 @@
 
 <div id="toast"></div>
 
+<script src="auth.js"></script>
 <script>
-  const API = 'http://localhost:8000';
+  const currentUser = window.auth.enforceAuth('command_center');
+  if (!currentUser) throw new Error('Not authenticated');
+
   const POLL_INTERVAL = 7000;
+
+  // Auth-aware fetch – includes JWT if present
+  async function apiFetch(path, opts = {}) {
+    return window.auth.apiFetch(path, opts);
+  }
 
   let allIncidents = [];
   let shelterMap   = {};  // id → name
@@ -149,16 +157,14 @@
   // ── Fetch shelters once ───────────────────────────────────────────────────
   async function loadShelters() {
     try {
-      const shelters = await fetch(`${API}/shelters`).then(r => r.json());
+      const shelters = await apiFetch('/shelters');
       shelters.forEach(s => { shelterMap[s.id] = s.name; });
     } catch (_) {}
   }
 
   // ── Fetch incidents ───────────────────────────────────────────────────────
   async function fetchIncidents() {
-    const res = await fetch(`${API}/incidents`);
-    if (!res.ok) throw new Error(res.statusText);
-    return res.json();
+    return await apiFetch('/incidents');
   }
 
   // ── Update stats bar ──────────────────────────────────────────────────────
@@ -273,7 +279,7 @@
     const status = selectEl.value;
     selectEl.className = `status-select status-${status}`;
     try {
-      await fetch(`${API}/incident/${id}`, {
+      await window.auth.apiFetch(`/incident/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),

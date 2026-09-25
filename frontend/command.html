@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRA – Emergency Operations</title>
+  <meta name="description" content="FIRA Command Center – Emergency Operations Dashboard." />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    main { padding: var(--space-lg); }
+
+    /* ── KPI Cards ── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px; margin-bottom: 24px;
+    }
+    @media (max-width: 900px) { .kpi-row { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+      transition: border-color 0.2s;
+    }
+    .kpi-card:hover { border-color: var(--border-mid); }
+    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; }
+    .kpi-value { font-size: 32px; font-weight: 800; line-height: 1; }
+    .kpi-sub   { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    /* ── Incident Queue ── */
+    .section-title {
+      font-size: 16px; font-weight: 700; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title .count-badge {
+      background: rgba(59,130,246,0.2); color: #60a5fa;
+      font-size: 11px; padding: 2px 8px; border-radius: 100px;
+    }
+
+    /* ── Incident list ── */
+    .incident-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .inc-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px;
+      cursor: pointer; transition: border-color 0.2s, transform 0.15s;
+      display: grid; grid-template-columns: auto 1fr auto;
+      gap: 16px; align-items: center;
+    }
+    .inc-card:hover { border-color: var(--border-mid); transform: translateX(2px); }
+    .inc-card.selected { border-color: #3b82f6; background: rgba(59,130,246,0.06); }
+
+    .inc-rank {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px; font-weight: 800; min-width: 36px; text-align: center;
+    }
+    .inc-meta { display: flex; flex-direction: column; gap: 4px; }
+    .inc-top  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .inc-id   { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); }
+    .inc-name { font-weight: 600; font-size: 14px; }
+    .inc-sub  { font-size: 11px; color: var(--text-muted); }
+
+    .status-pill {
+      padding: 3px 10px; border-radius: 100px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .status-reported   { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .status-prioritized { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .status-assigned   { background: rgba(234,179,8,0.15); color: #eab308; }
+    .status-in_progress { background: rgba(249,115,22,0.15); color: #f97316; }
+    .status-resolved   { background: rgba(34,197,94,0.15); color: #22c55e; }
+
+    .priority-badge {
+      padding: 3px 10px; border-radius: 100px; font-size: 10px; font-weight: 700;
+    }
+    .prio-Critical { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .prio-High     { background: rgba(249,115,22,0.15); color: #f97316; }
+    .prio-Moderate { background: rgba(234,179,8,0.15); color: #eab308; }
+    .prio-Low      { background: rgba(34,197,94,0.15); color: #22c55e; }
+
+    /* ── Detail panel ── */
+    .detail-panel {
+      display: none;
+      background: var(--surface); border: 1px solid var(--border-mid);
+      border-radius: var(--radius); padding: var(--space-lg);
+      margin-top: 20px; animation: fadeIn 0.3s ease;
+    }
+    .detail-panel.show { display: block; }
+    .detail-title { font-size: 18px; font-weight: 800; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .dg-item .dg-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 4px; }
+    .dg-item .dg-value { font-size: 14px; font-weight: 600; color: var(--text); }
+
+    /* Action row */
+    .action-row {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+      padding-top: 18px; border-top: 1px solid var(--border);
+    }
+    .action-row select { flex: 1; min-width: 160px; }
+    .action-row input  { flex: 2; }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .es-icon { font-size: 48px; margin-bottom: 12px; }
+
+    .score-bar { height: 6px; border-radius: 3px; background: var(--surface2); margin-top: 6px; overflow: hidden; }
+    .score-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+  </style>
+</head>
+<body>
+
+<div id="nav"></div>
+
+<header>
+  <a class="brand" href="dashboard.html">
+    <div class="brand-icon">🌊</div>
+    <div class="brand-name">FI<span>RA</span></div>
+  </a>
+  <div style="display:flex;gap:8px;align-items:center">
+    <div class="pulse-dot"></div>
+    <span class="live-label">LIVE</span>
+    <a href="index.html" class="btn btn-ghost">🗺 Map</a>
+    <a href="dashboard.html" class="btn btn-ghost">📊 Stats</a>
+  </div>
+</header>
+
+<main>
+
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Active Incidents</div>
+      <div class="kpi-value" id="kpi-active" style="color:#60a5fa">—</div>
+      <div class="kpi-sub">not yet resolved</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Critical</div>
+      <div class="kpi-value" id="kpi-critical" style="color:#ef4444">—</div>
+      <div class="kpi-sub">score ≥ 0.75</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">High Priority</div>
+      <div class="kpi-value" id="kpi-high" style="color:#f97316">—</div>
+      <div class="kpi-sub">score ≥ 0.50</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">People Affected</div>
+      <div class="kpi-value" id="kpi-people" style="color:#eab308">—</div>
+      <div class="kpi-sub">estimated total</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Resolved Today</div>
+      <div class="kpi-value" id="kpi-resolved" style="color:#22c55e">—</div>
+      <div class="kpi-sub">since midnight</div>
+    </div>
+  </div>
+
+  <!-- Incident Queue -->
+  <div class="section-title">
+    🚨 Incident Queue
+    <span class="count-badge" id="queue-count">0</span>
+    <button class="btn btn-ghost" style="margin-left:auto;font-size:12px" onclick="load()">↻ Refresh</button>
+  </div>
+
+  <div id="incident-list" class="incident-list">
+    <div class="empty-state"><div class="es-icon">⏳</div><p>Loading incidents…</p></div>
+  </div>
+
+  <!-- Detail Panel -->
+  <div id="detail-panel" class="detail-panel">
+    <div class="detail-title">
+      <span id="d-id"></span>
+      <span id="d-status-pill" class="status-pill"></span>
+      <span id="d-priority-badge" class="priority-badge"></span>
+    </div>
+
+    <div class="detail-grid">
+      <div class="dg-item"><div class="dg-label">Reporter</div><div class="dg-value" id="d-name">—</div></div>
+      <div class="dg-item"><div class="dg-label">Phone</div><div class="dg-value" id="d-phone">—</div></div>
+      <div class="dg-item"><div class="dg-label">Location</div><div class="dg-value" id="d-loc">—</div></div>
+      <div class="dg-item"><div class="dg-label">Submitted</div><div class="dg-value" id="d-time">—</div></div>
+      <div class="dg-item"><div class="dg-label">Severity</div><div class="dg-value" id="d-sev">—</div></div>
+      <div class="dg-item"><div class="dg-label">Flood Type</div><div class="dg-value" id="d-type">—</div></div>
+      <div class="dg-item"><div class="dg-label">Water Depth</div><div class="dg-value" id="d-depth">—</div></div>
+      <div class="dg-item"><div class="dg-label">People Affected</div><div class="dg-value" id="d-affected">—</div></div>
+      <div class="dg-item"><div class="dg-label">People Trapped</div><div class="dg-value" id="d-trapped">—</div></div>
+      <div class="dg-item"><div class="dg-label">Medical Emergency</div><div class="dg-value" id="d-medical">—</div></div>
+      <div class="dg-item"><div class="dg-label">Assigned Shelter</div><div class="dg-value" id="d-shelter">—</div></div>
+      <div class="dg-item"><div class="dg-label">Assigned Resource</div><div class="dg-value" id="d-resource">—</div></div>
+    </div>
+
+    <div class="dg-item" style="margin-bottom:16px">
+      <div class="dg-label">Description</div>
+      <div class="dg-value" id="d-desc" style="font-weight:400;font-size:13px;color:var(--text-muted)">—</div>
+    </div>
+
+    <div class="dg-item" style="margin-bottom:16px">
+      <div class="dg-label">Priority Score</div>
+      <div class="dg-value" id="d-score">—</div>
+      <div class="score-bar"><div class="score-fill" id="d-score-bar"></div></div>
+    </div>
+
+    <!-- Response Actions -->
+    <div class="action-row">
+      <div class="form-group" style="flex:1;margin:0">
+        <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block">Action</label>
+        <select id="action-select">
+          <option value="">Select action…</option>
+          <option value="assign">Assign Resource</option>
+          <option value="in_progress">Mark In Progress</option>
+          <option value="resolved">Mark Resolved</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:2;margin:0" id="resource-group">
+        <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block">Available Resource</label>
+        <input id="resource-input" type="text" placeholder="e.g. Rescue Team Alpha, Boat Unit 3" />
+      </div>
+      <button class="btn btn-primary" onclick="applyAction()" id="action-btn">Apply</button>
+    </div>
+    <div id="action-feedback" style="margin-top:10px;font-size:12px;color:var(--low);display:none"></div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script src="auth.js"></script>
+<script>
+  // Enforce command_center login
+  const currentUser = window.auth.enforceAuth('command_center');
+  if (!currentUser) throw new Error('Not authenticated');
+
+  let selectedId = null;
+  let allIncidents = [];
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short' })
+      + ' ' + d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12: true });
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function levelColor(level) {
+    return { Critical: '#ef4444', High: '#f97316', Moderate: '#eab308', Low: '#22c55e' }[level] || '#60a5fa';
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  let _tt;
+  function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `show ${type}`;
+    clearTimeout(_tt);
+    _tt = setTimeout(() => el.className = '', 2800);
+  }
+
+  // ── Load KPI stats ────────────────────────────────────────────────────────
+  async function loadStats() {
+    try {
+      const s = await window.auth.apiFetch('/command/stats');
+      document.getElementById('kpi-active').textContent   = s.active_incidents;
+      document.getElementById('kpi-critical').textContent = s.critical_incidents;
+      document.getElementById('kpi-high').textContent     = s.high_priority;
+      document.getElementById('kpi-people').textContent   = s.people_affected;
+      document.getElementById('kpi-resolved').textContent = s.resolved_today;
+    } catch (err) {
+      console.error('Stats error:', err);
+    }
+  }
+
+  // ── Render one incident card ───────────────────────────────────────────────
+  function renderCard(inc, rank) {
+    const color = levelColor(inc.priority_level);
+    const pClass = `prio-${inc.priority_level || 'Low'}`;
+    const sClass = `status-${inc.status}`;
+    const isSelected = inc.id === selectedId ? ' selected' : '';
+
+    const details = [
+      inc.people_affected != null && `👥 ${inc.people_affected} affected`,
+      inc.people_trapped  && `🔴 ${inc.people_trapped} trapped`,
+      inc.medical_emergency && '🚑 Medical',
+      inc.flood_type     && escHtml(inc.flood_type),
+    ].filter(Boolean).join(' · ');
+
+    return `
+      <div class="inc-card${isSelected}" data-id="${inc.id}" onclick="selectIncident(${inc.id})">
+        <div class="inc-rank" style="color:${color}">#${rank}</div>
+        <div class="inc-meta">
+          <div class="inc-top">
+            <span class="inc-id">#${inc.id}</span>
+            <span class="inc-name">${escHtml(inc.name)}</span>
+            <span class="status-pill ${sClass}">${inc.status.replace('_',' ')}</span>
+            ${inc.priority_level ? `<span class="priority-badge ${pClass}">${inc.priority_level}</span>` : ''}
+          </div>
+          <div class="inc-sub">
+            📍 ${inc.lat.toFixed(4)}, ${inc.lng.toFixed(4)}
+            · Sev ${inc.severity}/5
+            · ${fmtDate(inc.created_at)}
+            ${details ? `· ${details}` : ''}
+          </div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:14px;color:${color};font-weight:700">
+          ${inc.priority_score != null ? inc.priority_score.toFixed(3) : '—'}
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Populate detail panel ─────────────────────────────────────────────────
+  function showDetail(inc) {
+    selectedId = inc.id;
+    const color = levelColor(inc.priority_level);
+    const sClass = `status-${inc.status}`;
+    const pClass = `prio-${inc.priority_level || 'Low'}`;
+
+    document.getElementById('d-id').textContent = `Incident #${inc.id}`;
+
+    const sp = document.getElementById('d-status-pill');
+    sp.textContent = inc.status.replace('_', ' ');
+    sp.className = `status-pill ${sClass}`;
+
+    const pb = document.getElementById('d-priority-badge');
+    pb.textContent = inc.priority_level || '';
+    pb.className = `priority-badge ${pClass}`;
+
+    document.getElementById('d-name').textContent     = inc.name || '—';
+    document.getElementById('d-phone').textContent    = inc.phone || '—';
+    document.getElementById('d-loc').textContent      = `${inc.lat.toFixed(5)}, ${inc.lng.toFixed(5)}`;
+    document.getElementById('d-time').textContent     = fmtDate(inc.created_at);
+    document.getElementById('d-sev').textContent      = `${inc.severity} / 5`;
+    document.getElementById('d-type').textContent     = inc.flood_type || '—';
+    document.getElementById('d-depth').textContent    = inc.water_depth_m != null ? `${inc.water_depth_m}m` : '—';
+    document.getElementById('d-affected').textContent = inc.people_affected != null ? inc.people_affected : '—';
+    document.getElementById('d-trapped').textContent  = inc.people_trapped ? `${inc.people_trapped} ⚠️` : '0';
+    document.getElementById('d-medical').textContent  = inc.medical_emergency ? '🚑 YES' : 'No';
+    document.getElementById('d-shelter').textContent  = inc.shelter_name || '—';
+    document.getElementById('d-resource').textContent = inc.assigned_resource || 'Not assigned';
+    document.getElementById('d-desc').textContent     = inc.description || '—';
+
+    const score = inc.priority_score || 0;
+    document.getElementById('d-score').textContent     = score.toFixed(3);
+    document.getElementById('d-score').style.color     = color;
+    document.getElementById('d-score-bar').style.width = `${Math.min(score * 100, 100)}%`;
+    document.getElementById('d-score-bar').style.background = `linear-gradient(90deg, ${color}, #3b82f6)`;
+
+    document.getElementById('detail-panel').classList.add('show');
+    document.getElementById('action-feedback').style.display = 'none';
+    document.getElementById('detail-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function selectIncident(id) {
+    const inc = allIncidents.find(i => i.id === id);
+    if (!inc) return;
+    // Update selection highlight
+    document.querySelectorAll('.inc-card').forEach(c => c.classList.remove('selected'));
+    const card = document.querySelector(`.inc-card[data-id="${id}"]`);
+    if (card) card.classList.add('selected');
+    showDetail(inc);
+  }
+
+  // Show/hide resource input
+  document.getElementById('action-select').addEventListener('change', function () {
+    const rg = document.getElementById('resource-group');
+    rg.style.display = this.value === 'assign' ? '' : 'none';
+  });
+  document.getElementById('resource-group').style.display = 'none';
+
+  // ── Apply action ──────────────────────────────────────────────────────────
+  async function applyAction() {
+    if (!selectedId) return;
+    const action   = document.getElementById('action-select').value;
+    const resource = document.getElementById('resource-input').value.trim();
+    if (!action) { toast('Please select an action', 'error'); return; }
+    if (action === 'assign' && !resource) { toast('Please enter a resource name', 'error'); return; }
+
+    const btn = document.getElementById('action-btn');
+    btn.disabled = true;
+    try {
+      const result = await window.auth.apiFetch(`/incident/${selectedId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, resource: resource || null }),
+      });
+
+      // Update local cache
+      const idx = allIncidents.findIndex(i => i.id === selectedId);
+      if (idx !== -1) allIncidents[idx] = result;
+
+      toast(`Incident #${selectedId} → ${result.status}`, 'success');
+      const fb = document.getElementById('action-feedback');
+      fb.textContent = `✅ Status updated to "${result.status}"`;
+      fb.style.display = 'block';
+
+      showDetail(result);
+      renderQueue();
+      loadStats();
+    } catch (err) {
+      toast(window.auth.errorMessage(err, 'That response action could not be completed.'), 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Render queue ──────────────────────────────────────────────────────────
+  function renderQueue() {
+    const list = document.getElementById('incident-list');
+    const unresolved = allIncidents.filter(i => i.status !== 'resolved');
+    const resolved   = allIncidents.filter(i => i.status === 'resolved');
+    const ordered = [...unresolved, ...resolved];
+
+    document.getElementById('queue-count').textContent = allIncidents.length;
+
+    if (allIncidents.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="es-icon">✅</div><p>No incidents yet. Submit a report from the citizen portal.</p></div>`;
+      return;
+    }
+
+    list.innerHTML = ordered.map((inc, i) => renderCard(inc, i + 1)).join('');
+  }
+
+  // ── Load incidents ─────────────────────────────────────────────────────────
+  async function load() {
+    try {
+      allIncidents = await window.auth.apiFetch('/incidents');
+      renderQueue();
+      await loadStats();
+    } catch (err) {
+      toast(window.auth.errorMessage(err, 'Incident data is temporarily unavailable.'), 'error');
+    }
+  }
+
+  // Boot
+  load();
+  setInterval(load, 10000);
+</script>
+</body>
+</html>

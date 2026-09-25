@@ -1,11 +1,11 @@
 """
 FIRA – SQLAlchemy ORM models.
-Defines the database schema for flood zones, citizen reports, and shelters.
+Defines the database schema for flood zones, citizen reports, shelters, and users.
 """
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
 
 from database import Base
 
@@ -40,15 +40,19 @@ class Report(Base):
 
     priority_score is computed by the priority engine after submission.
     shelter_id optionally links the reporter to a recommended shelter.
+    reported_by links the report to the submitting User.
     """
 
     __tablename__ = "reports"
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # --- Reporter details ---
+    # --- Reporter details (cached for display) ---
     name = Column(String, nullable=False)
     phone = Column(String, nullable=True)
+
+    # --- Ownership (FK to users.id) ---
+    reported_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # --- Incident location ---
     lat = Column(Float, nullable=False)
@@ -58,10 +62,20 @@ class Report(Base):
     severity = Column(Integer, nullable=False)            # 1 (minor) – 5 (catastrophic)
     description = Column(String, nullable=True)
 
+    # --- Extended triage fields ---
+    flood_type = Column(String, nullable=True)            # e.g. river / urban / flash
+    water_depth_m = Column(Float, nullable=True)
+    people_affected = Column(Integer, nullable=True)
+    people_trapped = Column(Integer, nullable=True)
+    medical_emergency = Column(Boolean, nullable=True)
+    photo_url = Column(String, nullable=True)
+
     # --- Computed / assigned fields ---
     priority_score = Column(Float, nullable=True)         # Set by priority_engine
-    status = Column(String, default="pending")            # pending | active | resolved
+    # Workflow status: reported → prioritized → assigned → in_progress → resolved
+    status = Column(String, default="reported")
     shelter_id = Column(Integer, ForeignKey("shelters.id"), nullable=True)
+    assigned_resource = Column(String, nullable=True)     # free-text resource name
 
     # --- Timestamps ---
     created_at = Column(
@@ -69,6 +83,7 @@ class Report(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Shelter(Base):
@@ -81,3 +96,27 @@ class Shelter(Base):
     lat = Column(Float, nullable=False)
     lng = Column(Float, nullable=False)
     capacity = Column(Integer, nullable=False)
+
+
+class User(Base):
+    """Application user with authentication details and role.
+
+    Roles are limited to "citizen" and "command_center" and are stored in the database.
+    Passwords are stored as a securely hashed value using bcrypt.
+    """
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # must be 'citizen' or 'command_center'
+    phone = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )

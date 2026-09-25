@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRA – My Reports</title>
+  <meta name="description" content="View the status of your flood incident reports." />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    main { padding: var(--space-lg); max-width: 900px; margin: 0 auto; }
+
+    .page-title {
+      font-size: 22px; font-weight: 800; margin-bottom: 24px;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .report-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: var(--space-lg);
+      margin-bottom: 16px; transition: border-color 0.2s;
+      animation: fadeIn 0.3s ease;
+    }
+    .report-card:hover { border-color: var(--border-mid); }
+
+    .report-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .report-id   { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); }
+    .report-time { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+
+    .status-pill {
+      padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .status-reported   { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .status-prioritized { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .status-assigned   { background: rgba(234,179,8,0.15); color: #eab308; }
+    .status-in_progress { background: rgba(249,115,22,0.15); color: #f97316; }
+    .status-resolved   { background: rgba(34,197,94,0.15); color: #22c55e; }
+
+    .priority-badge {
+      padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 700;
+    }
+    .prio-Critical { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .prio-High     { background: rgba(249,115,22,0.15); color: #f97316; }
+    .prio-Moderate { background: rgba(234,179,8,0.15); color: #eab308; }
+    .prio-Low      { background: rgba(34,197,94,0.15); color: #22c55e; }
+
+    .report-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+    .rb-item { font-size: 12px; }
+    .rb-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+    .rb-value { font-weight: 600; color: var(--text); }
+
+    .progress-track {
+      display: flex; gap: 4px; margin-top: 14px; align-items: center;
+    }
+    .progress-step {
+      flex: 1; height: 4px; border-radius: 2px;
+      background: var(--surface2);
+      transition: background 0.3s;
+    }
+    .progress-step.done { background: #3b82f6; }
+    .progress-step.active { background: #60a5fa; box-shadow: 0 0 6px rgba(96,165,250,0.5); }
+    .progress-step.resolved-done { background: #22c55e; }
+
+    .progress-labels {
+      display: flex; justify-content: space-between;
+      font-size: 9px; color: var(--text-muted);
+      text-transform: uppercase; margin-top: 4px;
+    }
+
+    .empty-state {
+      text-align: center; padding: 60px 20px; color: var(--text-muted);
+    }
+    .empty-state .es-icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    .refresh-btn { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+<div id="nav"></div>
+
+<header>
+  <a class="brand" href="index.html">
+    <div class="brand-icon">🌊</div>
+    <div class="brand-name">FI<span>RA</span></div>
+  </a>
+  <div style="display:flex;gap:8px">
+    <a href="report.html" class="btn btn-primary">⚠️ New Report</a>
+    <a href="index.html" class="btn btn-ghost">🗺 Map</a>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">📋 My Reports</div>
+  <button class="btn btn-ghost refresh-btn" onclick="load()">↻ Refresh</button>
+  <div id="reports-container">
+    <div class="empty-state">
+      <div class="es-icon">⏳</div>
+      <p>Loading your reports…</p>
+    </div>
+  </div>
+</main>
+
+<script src="auth.js"></script>
+<script>
+  const currentUser = window.auth.enforceAuth('citizen');
+  if (!currentUser) throw new Error('Not authenticated');
+
+  const STEPS = ['reported', 'prioritized', 'assigned', 'in_progress', 'resolved'];
+  const STEP_LABELS = ['Reported', 'Prioritized', 'Assigned', 'In Progress', 'Resolved'];
+
+  function stepIndex(status) {
+    return STEPS.indexOf(status);
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+      + ' ' + d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12: true });
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function buildProgressBar(status) {
+    const idx = stepIndex(status);
+    const isResolved = status === 'resolved';
+
+    const steps = STEPS.map((s, i) => {
+      let cls = 'progress-step';
+      if (isResolved) cls += ' resolved-done';
+      else if (i < idx) cls += ' done';
+      else if (i === idx) cls += ' active';
+      return `<div class="${cls}"></div>`;
+    }).join('');
+
+    const labels = STEP_LABELS.map(l => `<span>${l}</span>`).join('');
+
+    return `
+      <div class="progress-track">${steps}</div>
+      <div class="progress-labels">${labels}</div>
+    `;
+  }
+
+  function levelColor(level) {
+    return { Critical: '#ef4444', High: '#f97316', Moderate: '#eab308', Low: '#22c55e' }[level] || '#60a5fa';
+  }
+
+  function renderCard(r) {
+    const pClass = `prio-${r.priority_level || 'Low'}`;
+    const sClass = `status-${r.status}`;
+    const color  = levelColor(r.priority_level);
+
+    return `
+      <div class="report-card">
+        <div class="report-header">
+          <span class="report-id">#${r.id}</span>
+          <span class="status-pill ${sClass}">${r.status.replace('_', ' ')}</span>
+          ${r.priority_level ? `<span class="priority-badge ${pClass}">${r.priority_level}</span>` : ''}
+          ${r.priority_score != null ? `<span style="font-size:11px;color:${color}">Score: ${r.priority_score.toFixed(3)}</span>` : ''}
+          <span class="report-time">${fmtDate(r.created_at)}</span>
+        </div>
+
+        <div class="report-body">
+          <div class="rb-item">
+            <div class="rb-label">Severity</div>
+            <div class="rb-value">${r.severity} / 5</div>
+          </div>
+          ${r.flood_type ? `<div class="rb-item"><div class="rb-label">Flood Type</div><div class="rb-value">${escHtml(r.flood_type)}</div></div>` : ''}
+          ${r.water_depth_m != null ? `<div class="rb-item"><div class="rb-label">Water Depth</div><div class="rb-value">${r.water_depth_m}m</div></div>` : ''}
+          ${r.people_affected != null ? `<div class="rb-item"><div class="rb-label">People Affected</div><div class="rb-value">${r.people_affected}</div></div>` : ''}
+          ${r.people_trapped ? `<div class="rb-item"><div class="rb-label">Trapped</div><div class="rb-value" style="color:#f97316">${r.people_trapped}</div></div>` : ''}
+          ${r.medical_emergency ? `<div class="rb-item"><div class="rb-label">Medical</div><div class="rb-value" style="color:#ef4444">🚑 YES</div></div>` : ''}
+          ${r.shelter_name ? `<div class="rb-item"><div class="rb-label">Shelter</div><div class="rb-value">${escHtml(r.shelter_name)}</div></div>` : ''}
+          ${r.assigned_resource ? `<div class="rb-item"><div class="rb-label">Resource</div><div class="rb-value">${escHtml(r.assigned_resource)}</div></div>` : ''}
+          ${r.description ? `<div class="rb-item" style="grid-column:1/-1"><div class="rb-label">Description</div><div class="rb-value" style="font-weight:400">${escHtml(r.description)}</div></div>` : ''}
+        </div>
+
+        ${buildProgressBar(r.status)}
+      </div>
+    `;
+  }
+
+  async function load() {
+    const container = document.getElementById('reports-container');
+    container.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div><p>Loading…</p></div>`;
+    try {
+      const reports = await window.auth.apiFetch('/incidents');
+      if (!reports || reports.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="es-icon">📭</div>
+            <p>You haven't submitted any reports yet.</p>
+            <a href="report.html" class="btn btn-primary" style="margin-top:16px">Submit a Report</a>
+          </div>`;
+        return;
+      }
+      container.innerHTML = reports.map(renderCard).join('');
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>${window.auth.errorMessage(err, 'Your reports are unavailable right now.')}</p></div>`;
+    }
+  }
+
+  // Auto-refresh every 15 seconds
+  load();
+  setInterval(load, 15000);
+</script>
+</body>
+</html>
