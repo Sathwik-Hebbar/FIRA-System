@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRA – Report Incident</title>
+  <meta name="description" content="Submit a citizen flood incident report to the FIRA emergency response system." />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Shared FIRA stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <style>
+    /* ── report.html page-specific ── */
+
+    /* Two-column page grid */
+    .page {
+      max-width: 900px; margin: 0 auto; padding: var(--space-xl) var(--space-lg);
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    }
+    @media (max-width: 680px) { .page { grid-template-columns: 1fr; } }
+
+    /* Severity dot indicator */
+    #severity-indicator {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; margin-left: 6px;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+
+    /* Click-to-pin Leaflet map */
+    #pick-map {
+      height: 240px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); overflow: hidden; margin-bottom: 10px;
+    }
+    .coords-row { display: flex; gap: 8px; margin-top: 8px; }
+    .coord-box {
+      flex: 1; padding: 8px 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted);
+    }
+    .map-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+    /* Result panel (shown after submit) */
+    #result-card {
+      display: none;
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(59,130,246,0.08));
+      border: 1px solid rgba(34,197,94,0.25);
+      border-radius: var(--radius); padding: var(--space-lg);
+      animation: fadeIn 0.4s ease;
+    }
+    .result-title { font-size: 16px; font-weight: 700; color: var(--low); margin-bottom: 16px; }
+    .result-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    .result-stat  { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+    .rs-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 4px; }
+    .rs-value { font-size: 16px; font-weight: 700; }
+    .priority-bar-wrap { margin-top: 16px; }
+    .priority-bar-wrap label { font-size: 11px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="brand" href="index.html">
+    <div class="brand-icon">🌊</div>
+    <div class="brand-name">FI<span>RA</span></div>
+  </a>
+  <div style="display:flex;gap:8px">
+    <a href="dashboard.html" class="btn btn-ghost">📋 Dashboard</a>
+    <a href="index.html" class="btn btn-ghost">← Map</a>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Left: Form -->
+  <div class="card">
+    <div class="card-title">⚠️ Report a Flood Incident</div>
+    <form id="report-form" novalidate>
+
+      <div class="form-group">
+        <label>Full Name *</label>
+        <input id="f-name" type="text" placeholder="Your name" required />
+      </div>
+
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input id="f-phone" type="tel" placeholder="+91 XXXXX XXXXX" />
+      </div>
+
+      <div class="form-group">
+        <label>
+          Severity *
+          <span id="severity-indicator"></span>
+        </label>
+        <select id="f-severity" required onchange="updateSeverityIndicator()">
+          <option value="">Select severity…</option>
+          <option value="Low">Low – Minor flooding, no immediate danger</option>
+          <option value="Medium">Medium – Significant flooding, monitor closely</option>
+          <option value="High">High – Immediate danger, evacuation likely</option>
+          <option value="Critical">Critical – Life-threatening emergency</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="f-desc" placeholder="Describe the situation — mention if anyone is trapped, elderly, children, water rising, no power, etc."></textarea>
+      </div>
+
+      <div class="submit-row">
+        <button type="submit" class="btn btn-primary" id="submit-btn" style="width:100%">
+          Submit Incident Report
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Right: Map picker -->
+  <div class="card">
+    <div class="card-title">📍 Pin Incident Location *</div>
+    <div id="pick-map"></div>
+    <div class="map-hint">Click on the map to place the incident marker</div>
+    <div class="coords-row">
+      <div class="coord-box" id="disp-lat">Lat: —</div>
+      <div class="coord-box" id="disp-lng">Lng: —</div>
+    </div>
+  </div>
+
+  <!-- Result (shown after submit) -->
+  <div id="result-card">
+    <div class="result-title">✅ Incident Submitted Successfully</div>
+    <div class="result-grid">
+      <div class="result-stat">
+        <div class="rs-label">Report ID</div>
+        <div class="rs-value" id="r-id">—</div>
+      </div>
+      <div class="result-stat">
+        <div class="rs-label">Priority Score</div>
+        <div class="rs-value" id="r-score" style="color:#60a5fa">—</div>
+      </div>
+      <div class="result-stat">
+        <div class="rs-label">Severity</div>
+        <div class="rs-value" id="r-severity">—</div>
+      </div>
+      <div class="result-stat">
+        <div class="rs-label">Assigned Shelter</div>
+        <div class="rs-value" id="r-shelter" style="font-size:13px">—</div>
+      </div>
+      <div class="result-stat">
+        <div class="rs-label">Status</div>
+        <div class="rs-value" id="r-status">—</div>
+      </div>
+    </div>
+    <div class="priority-bar-wrap">
+      <label>Priority Score (out of 100)</label>
+      <div class="priority-bar"><div class="priority-fill" id="r-bar" style="width:0%"></div></div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <a href="dashboard.html" class="btn btn-primary">📋 View All Incidents</a>
+      <button class="btn btn-ghost" onclick="resetForm()">Submit Another</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const API = 'http://localhost:8000';
+
+  // ── Map picker ───────────────────────────────────────────────────────────
+  const pickMap = L.map('pick-map').setView([28.675, 77.10], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 19,
+  }).addTo(pickMap);
+
+  let pickedLat = null, pickedLng = null, pinMarker = null;
+
+  const pinIcon = L.divIcon({
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:rgba(239,68,68,0.35);border:2px solid #ef4444;box-shadow:0 0 10px rgba(239,68,68,0.5);display:flex;align-items:center;justify-content:center;font-size:11px">📍</div>`,
+    className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+  });
+
+  pickMap.on('click', e => {
+    pickedLat = parseFloat(e.latlng.lat.toFixed(6));
+    pickedLng = parseFloat(e.latlng.lng.toFixed(6));
+    document.getElementById('disp-lat').textContent = `Lat: ${pickedLat}`;
+    document.getElementById('disp-lng').textContent = `Lng: ${pickedLng}`;
+    if (pinMarker) pickMap.removeLayer(pinMarker);
+    pinMarker = L.marker([pickedLat, pickedLng], { icon: pinIcon })
+      .bindPopup('<span style="color:#e2e8f0;font-size:12px">Incident location</span>')
+      .addTo(pickMap)
+      .openPopup();
+  });
+
+  // ── Severity indicator ───────────────────────────────────────────────────
+  const SEV_COLORS = { Low: '#22c55e', Medium: '#eab308', High: '#f97316', Critical: '#ef4444' };
+  function updateSeverityIndicator() {
+    const val = document.getElementById('f-severity').value;
+    const el = document.getElementById('severity-indicator');
+    el.style.background = SEV_COLORS[val] || 'transparent';
+    el.style.boxShadow = val ? `0 0 6px ${SEV_COLORS[val]}` : 'none';
+  }
+
+  // ── Form submit ──────────────────────────────────────────────────────────
+  document.getElementById('report-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name     = document.getElementById('f-name').value.trim();
+    const phone    = document.getElementById('f-phone').value.trim();
+    const severity = document.getElementById('f-severity').value;
+    const desc     = document.getElementById('f-desc').value.trim();
+
+    if (!name)     { alert('Please enter your name.'); return; }
+    if (!severity) { alert('Please select a severity level.'); return; }
+    if (!pickedLat){ alert('Please click the map to set the incident location.'); return; }
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    try {
+      const res = await fetch(`${API}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone: phone || null, lat: pickedLat, lng: pickedLng, severity, description: desc || null }),
+      });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const data = await res.json();
+      showResult(data);
+    } catch (err) {
+      alert('Submission failed: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = 'Submit Incident Report';
+    }
+  });
+
+  function showResult(d) {
+    document.getElementById('r-id').textContent      = `#${d.id}`;
+    document.getElementById('r-score').textContent   = d.priority_score.toFixed(1);
+    document.getElementById('r-severity').textContent = d.severity;
+    document.getElementById('r-shelter').textContent  = d.shelter_name || 'None assigned';
+    document.getElementById('r-status').textContent   = d.status;
+
+    const pct = Math.min(d.priority_score, 100);
+    const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f97316' : pct >= 40 ? '#eab308' : '#22c55e';
+    document.getElementById('r-bar').style.width = pct + '%';
+    document.getElementById('r-bar').style.background = `linear-gradient(90deg, ${color}, #3b82f6)`;
+
+    document.getElementById('result-card').style.display = 'block';
+    document.getElementById('result-card').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('submit-btn').textContent = 'Submit Incident Report';
+    document.getElementById('submit-btn').disabled = false;
+  }
+
+  function resetForm() {
+    document.getElementById('report-form').reset();
+    updateSeverityIndicator();
+    document.getElementById('result-card').style.display = 'none';
+    pickedLat = pickedLng = null;
+    document.getElementById('disp-lat').textContent = 'Lat: —';
+    document.getElementById('disp-lng').textContent = 'Lng: —';
+    if (pinMarker) { pickMap.removeLayer(pinMarker); pinMarker = null; }
+  }
+</script>
+</body>
+</html>

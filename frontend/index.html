@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRA – Flood Intelligence &amp; Response Application</title>
+  <meta name="description" content="Real-time flood risk monitoring dashboard. View zone risk levels, shelter locations, and simulate rainfall events." />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Shared FIRA stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <style>
+    /* ── index.html page-specific ── */
+    html, body { height: 100%; overflow: hidden; }
+    #app       { display: flex; flex-direction: column; height: 100vh; }
+    .content   { display: flex; flex: 1; overflow: hidden; }
+    #map       { flex: 1; }
+
+    #sidebar {
+      width: 300px; flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto; z-index: 500;
+    }
+    .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border); }
+    .sidebar-section:last-child { border-bottom: none; flex: 1; }
+
+    /* Simulate controls */
+    .simulate-row  { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .delta-row     { display: flex; align-items: center; gap: 8px; }
+    .delta-row label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    #delta-display { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #60a5fa; width: 40px; text-align: right; }
+
+    /* Risk legend */
+    .legend      { display: flex; flex-direction: column; gap: 6px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .legend-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
+
+    /* Zone list cards */
+    #zone-list  { display: flex; flex-direction: column; gap: 6px; }
+    .zone-card  { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface2); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 10px; }
+    .zone-card:hover { border-color: var(--border-mid); transform: translateX(2px); }
+    .zone-card .zc-dot   { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .zone-card .zc-name  { font-size: 12px; font-weight: 500; flex: 1; }
+    .zone-card .zc-score { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .zone-card .zc-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 100px; }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Loading flood intelligence…</p>
+</div>
+
+<div id="app">
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🌊</div>
+      <div class="brand-name">FI<span>RA</span></div>
+    </div>
+    <div class="header-actions">
+      <a href="report.html" class="btn btn-danger" id="report-btn">⚠️ Report Incident</a>
+      <button class="btn btn-ghost" id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+    </div>
+  </header>
+
+  <div class="content">
+    <!-- Sidebar -->
+    <div id="sidebar">
+
+      <!-- Simulate Rain -->
+      <div class="sidebar-section">
+        <div class="section-title">Simulate Rainfall</div>
+        <select id="zone-select">
+          <option value="">Select a zone…</option>
+        </select>
+        <div class="simulate-row">
+          <div class="delta-row">
+            <label>Delta</label>
+            <input type="range" id="delta-slider" min="5" max="100" step="5" value="20" oninput="document.getElementById('delta-display').textContent = this.value + 'mm'" />
+            <span id="delta-display">20mm</span>
+          </div>
+          <button class="btn btn-rain" id="rain-btn" onclick="simulateRain()">
+            🌧 Simulate Rain Rise
+          </button>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="sidebar-section">
+        <div class="section-title">Risk Legend</div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--low);color:var(--low)"></div> Low (&lt; 0.35)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--moderate);color:var(--moderate)"></div> Moderate (0.35 – 0.59)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--high);color:var(--high)"></div> High (0.60 – 0.79)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--severe);color:var(--severe)"></div> Severe (≥ 0.80)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#60a5fa;color:#60a5fa"></div> Shelter</div>
+        </div>
+      </div>
+
+      <!-- Zone list -->
+      <div class="sidebar-section">
+        <div class="section-title">Zones</div>
+        <div id="zone-list"><p style="font-size:12px;color:var(--text-muted)">Loading…</p></div>
+      </div>
+
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  const API = 'http://localhost:8000';
+
+  // ── Map setup ─────────────────────────────────────────────────────────────
+  const map = L.map('map', { zoomControl: false }).setView([28.675, 77.10], 12);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  // ── Colour helpers ────────────────────────────────────────────────────────
+  const LEVEL_COLOR = {
+    Low:      '#22c55e',
+    Moderate: '#eab308',
+    High:     '#f97316',
+    Severe:   '#ef4444',
+  };
+  const LEVEL_EMOJI = { Low: '🟢', Moderate: '🟡', High: '🟠', Severe: '🔴' };
+
+  function levelColor(level) { return LEVEL_COLOR[level] || '#94a3b8'; }
+
+  // ── Marker layer groups ───────────────────────────────────────────────────
+  let zoneLayer = L.layerGroup().addTo(map);
+  let shelterLayer = L.layerGroup().addTo(map);
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let zonesCache = [];    // [{zone, risk}]
+  let sheltersCache = []; // [shelter]
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  let _toastTimer;
+  function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `show ${type}`;
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+  }
+
+  // ── Fetch helpers ─────────────────────────────────────────────────────────
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(API + path, opts);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  // ── Load zones + risk ─────────────────────────────────────────────────────
+  async function loadZones() {
+    const zones = await apiFetch('/zones');
+    const risks = await Promise.all(zones.map(z => apiFetch(`/risk/${z.id}`)));
+    zonesCache = zones.map((z, i) => ({ zone: z, risk: risks[i] }));
+
+    // Populate dropdown
+    const sel = document.getElementById('zone-select');
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="">Select a zone…</option>';
+    zonesCache.forEach(({ zone }) => {
+      const opt = document.createElement('option');
+      opt.value = zone.id;
+      opt.textContent = zone.name;
+      sel.appendChild(opt);
+    });
+    sel.value = currentVal;
+
+    // Zone list in sidebar
+    const list = document.getElementById('zone-list');
+    list.innerHTML = '';
+    zonesCache.forEach(({ zone, risk }) => {
+      const color = levelColor(risk.level);
+      const card = document.createElement('div');
+      card.className = 'zone-card';
+      card.innerHTML = `
+        <div class="zc-dot" style="background:${color};box-shadow:0 0 6px ${color}"></div>
+        <div class="zc-name">${zone.name}</div>
+        <div class="zc-score">${risk.score.toFixed(2)}</div>
+        <div class="zc-badge" style="background:${color}22;color:${color}">${risk.level}</div>
+      `;
+      card.onclick = () => map.setView([zone.lat, zone.lng], 14);
+      list.appendChild(card);
+    });
+
+    // Draw map markers
+    zoneLayer.clearLayers();
+    zonesCache.forEach(({ zone, risk }) => {
+      const color = levelColor(risk.level);
+      const marker = L.circleMarker([zone.lat, zone.lng], {
+        radius: 14,
+        fillColor: color,
+        color: color,
+        fillOpacity: 0.35,
+        weight: 2,
+        opacity: 0.9,
+      });
+
+      marker.bindPopup(`
+        <div class="popup-title">${zone.name}</div>
+        <div class="popup-row"><span>Risk Score</span><strong>${risk.score.toFixed(3)}</strong></div>
+        <div class="popup-row"><span>River Level</span><strong>${zone.river_level_m}m</strong> / danger <strong>${zone.danger_level_m}m</strong></div>
+        <div class="popup-row"><span>Rainfall</span><strong>${zone.rainfall_mm} mm</strong></div>
+        <div class="popup-row"><span>Elevation</span><strong>${zone.elevation_m} m</strong></div>
+        <div class="popup-row"><span>Top Factor</span><strong>${risk.reason}</strong></div>
+        <span class="popup-badge" style="background:${color}22;color:${color}">${LEVEL_EMOJI[risk.level]} ${risk.level}</span>
+      `);
+
+      // Pulse animation via a second transparent ring
+      L.circleMarker([zone.lat, zone.lng], {
+        radius: 20, fillColor: 'transparent',
+        color: color, weight: 1, opacity: 0.25,
+      }).addTo(zoneLayer);
+
+      marker.addTo(zoneLayer);
+    });
+  }
+
+  // ── Load shelters ─────────────────────────────────────────────────────────
+  async function loadShelters() {
+    sheltersCache = await apiFetch('/shelters');
+    shelterLayer.clearLayers();
+    sheltersCache.forEach(s => {
+      const icon = L.divIcon({
+        html: `<div style="
+          width:28px;height:28px;border-radius:50%;
+          background:rgba(96,165,250,0.25);
+          border:2px solid #60a5fa;
+          display:flex;align-items:center;justify-content:center;
+          font-size:14px;box-shadow:0 0 10px rgba(96,165,250,0.4)
+        ">🏥</div>`,
+        className: '',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
+
+      L.marker([s.lat, s.lng], { icon })
+        .bindPopup(`
+          <div class="popup-title">🏥 ${s.name}</div>
+          <div class="popup-row"><span>Capacity</span><strong>${s.capacity.toLocaleString()} people</strong></div>
+          <div class="popup-row"><span>Coords</span><strong>${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</strong></div>
+          <span class="popup-badge" style="background:rgba(96,165,250,0.15);color:#60a5fa">Emergency Shelter</span>
+        `)
+        .addTo(shelterLayer);
+    });
+  }
+
+  // ── Load all ──────────────────────────────────────────────────────────────
+  async function loadAll() {
+    try {
+      await Promise.all([loadZones(), loadShelters()]);
+    } catch (err) {
+      toast('⚠ Could not reach API — is the backend running?', 'error');
+      console.error(err);
+    }
+  }
+
+  // ── Simulate rain ─────────────────────────────────────────────────────────
+  async function simulateRain() {
+    const zoneId = parseInt(document.getElementById('zone-select').value);
+    if (!zoneId) { toast('Please select a zone first', 'error'); return; }
+
+    const delta = parseInt(document.getElementById('delta-slider').value);
+    const btn = document.getElementById('rain-btn');
+    btn.disabled = true;
+    btn.textContent = '…Simulating';
+
+    try {
+      const result = await apiFetch('/simulate-rain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zone_id: zoneId, delta }),
+      });
+      const level = result.risk.level;
+      const color = levelColor(level);
+      toast(`${result.name}: +${delta}mm → ${level} (${result.risk.score.toFixed(3)})`, 'success');
+      await loadZones(); // refresh map with new data
+    } catch (err) {
+      toast('Simulation failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🌧 Simulate Rain Rise';
+    }
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  (async () => {
+    await loadAll();
+    // Hide loading overlay
+    const ov = document.getElementById('loading');
+    ov.classList.add('hidden');
+    setTimeout(() => ov.remove(), 500);
+  })();
+</script>
+</body>
+</html>

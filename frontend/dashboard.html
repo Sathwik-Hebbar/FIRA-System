@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRA – Incident Dashboard</title>
+  <meta name="description" content="Live FIRA incident command dashboard. Monitor and triage flood reports by priority." />
+
+  <!-- Shared FIRA stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <style>
+    /* ── dashboard.html page-specific ── */
+    main { padding: var(--space-lg); }
+
+    /* Row entrance animation */
+    .row-enter { animation: rowIn 0.3s ease forwards; }
+  </style>
+
+</head>
+<body class="dashboard">
+
+<header>
+  <a class="brand" href="index.html">
+    <div class="brand-icon">🌊</div>
+    <div class="brand-name">FI<span>RA</span></div>
+  </a>
+  <div class="header-right">
+    <div class="pulse-dot"></div>
+    <span class="live-label">LIVE</span>
+    <span class="next-refresh" id="next-refresh">—</span>
+    <a href="report.html" class="btn btn-primary">⚠️ New Report</a>
+    <a href="index.html" class="btn btn-ghost">🗺 Map</a>
+  </div>
+</header>
+
+<!-- Stats bar -->
+<div class="stats-bar">
+  <div class="stat-card">
+    <div class="stat-label">Total Incidents</div>
+    <div class="stat-value" id="st-total" style="color:var(--text)">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">New</div>
+    <div class="stat-value" id="st-new" style="color:var(--accent)">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Assigned</div>
+    <div class="stat-value" id="st-assigned" style="color:var(--moderate)">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Resolved</div>
+    <div class="stat-value" id="st-resolved" style="color:var(--low)">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Critical</div>
+    <div class="stat-value" id="st-critical" style="color:var(--severe)">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg Priority</div>
+    <div class="stat-value" id="st-avg" style="color:var(--muted)">—</div>
+  </div>
+</div>
+
+<main>
+  <!-- Filter bar -->
+  <div class="filters">
+    <button class="filter-btn active" id="f-all"      onclick="setFilter('all')">All</button>
+    <button class="filter-btn" id="f-New"             onclick="setFilter('New')">New</button>
+    <button class="filter-btn" id="f-Assigned"        onclick="setFilter('Assigned')">Assigned</button>
+    <button class="filter-btn" id="f-Resolved"        onclick="setFilter('Resolved')">Resolved</button>
+    <button class="filter-btn" id="f-Critical"        onclick="setFilter('Critical')">Critical</button>
+    <button class="filter-btn" id="f-High"            onclick="setFilter('High')">High</button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">Incident Reports</span>
+      <span id="incident-count">Loading…</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Reporter</th>
+            <th>Severity</th>
+            <th>Priority</th>
+            <th>Description</th>
+            <th>Shelter</th>
+            <th>Status</th>
+            <th>Submitted</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr class="state-row"><td colspan="8">Loading incidents…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  const API = 'http://localhost:8000';
+  const POLL_INTERVAL = 7000;
+
+  let allIncidents = [];
+  let shelterMap   = {};  // id → name
+  let activeFilter = 'all';
+  let pollTimer;
+  let countdown;
+  let countdownSec = POLL_INTERVAL / 1000;
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  let _tt;
+  function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `show ${type}`;
+    clearTimeout(_tt);
+    _tt = setTimeout(() => el.className = '', 2800);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function priorityColor(score) {
+    if (score >= 90) return '#ef4444';
+    if (score >= 70) return '#f97316';
+    if (score >= 40) return '#eab308';
+    return '#22c55e';
+  }
+
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short' })
+      + ' ' + d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12: true });
+  }
+
+  function setFilter(f) {
+    activeFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    const el = document.getElementById('f-' + f);
+    if (el) el.classList.add('active');
+    renderTable();
+  }
+
+  // ── Fetch shelters once ───────────────────────────────────────────────────
+  async function loadShelters() {
+    try {
+      const shelters = await fetch(`${API}/shelters`).then(r => r.json());
+      shelters.forEach(s => { shelterMap[s.id] = s.name; });
+    } catch (_) {}
+  }
+
+  // ── Fetch incidents ───────────────────────────────────────────────────────
+  async function fetchIncidents() {
+    const res = await fetch(`${API}/incidents`);
+    if (!res.ok) throw new Error(res.statusText);
+    return res.json();
+  }
+
+  // ── Update stats bar ──────────────────────────────────────────────────────
+  function updateStats(incidents) {
+    const total    = incidents.length;
+    const newC     = incidents.filter(i => i.status === 'New').length;
+    const assigned = incidents.filter(i => i.status === 'Assigned').length;
+    const resolved = incidents.filter(i => i.status === 'Resolved').length;
+    const critical = incidents.filter(i => i.severity === 'Critical').length;
+    const avg      = total ? (incidents.reduce((s,i) => s + i.priority_score, 0) / total).toFixed(1) : '—';
+
+    document.getElementById('st-total').textContent    = total;
+    document.getElementById('st-new').textContent      = newC;
+    document.getElementById('st-assigned').textContent = assigned;
+    document.getElementById('st-resolved').textContent = resolved;
+    document.getElementById('st-critical').textContent = critical;
+    document.getElementById('st-avg').textContent      = avg;
+  }
+
+  // ── Render table ──────────────────────────────────────────────────────────
+  function renderTable() {
+    let rows = [...allIncidents];
+
+    // Filter
+    if (activeFilter !== 'all') {
+      if (['New', 'Assigned', 'Resolved'].includes(activeFilter)) {
+        rows = rows.filter(i => i.status === activeFilter);
+      } else {
+        rows = rows.filter(i => i.severity === activeFilter);
+      }
+    }
+
+    // Already sorted by priority_score desc from the API
+    const count = document.getElementById('incident-count');
+    count.textContent = `${rows.length} incident${rows.length !== 1 ? 's' : ''}`;
+
+    const tbody = document.getElementById('tbody');
+
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr class="state-row"><td colspan="8">No incidents match the current filter.</td></tr>`;
+      return;
+    }
+
+    // Diff-based update: only rebuild rows that changed
+    const existingIds = new Set([...tbody.querySelectorAll('tr[data-id]')].map(r => r.dataset.id));
+    const newIds      = new Set(rows.map(r => String(r.id)));
+
+    // Remove stale rows
+    tbody.querySelectorAll('tr[data-id]').forEach(r => {
+      if (!newIds.has(r.dataset.id)) r.remove();
+    });
+
+    // Insert / update rows in sorted order
+    rows.forEach((inc, idx) => {
+      const rowId = String(inc.id);
+      let tr = tbody.querySelector(`tr[data-id="${rowId}"]`);
+      const isNew = !tr;
+
+      if (!tr) {
+        tr = document.createElement('tr');
+        tr.dataset.id = rowId;
+        tr.className = 'row-enter';
+      }
+
+      const color   = priorityColor(inc.priority_score);
+      const shelter = inc.shelter_id ? (shelterMap[inc.shelter_id] || `Shelter #${inc.shelter_id}`) : '—';
+      const pct     = Math.min(inc.priority_score, 100);
+
+      tr.innerHTML = `
+        <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">#${inc.id}</td>
+        <td>
+          <div style="font-weight:500">${escHtml(inc.name)}</div>
+          ${inc.phone ? `<div style="font-size:11px;color:var(--muted)">${escHtml(inc.phone)}</div>` : ''}
+        </td>
+        <td><span class="badge sev-${inc.severity}">${inc.severity}</span></td>
+        <td>
+          <div class="p-wrap">
+            <span class="p-score" style="color:${color}">${inc.priority_score.toFixed(0)}</span>
+            <div class="p-bar"><div class="p-fill" style="width:${pct}%;background:${color}"></div></div>
+          </div>
+        </td>
+        <td><div class="desc-cell" title="${escHtml(inc.description || '')}">${escHtml(inc.description || '—')}</div></td>
+        <td style="font-size:12px">${escHtml(shelter)}</td>
+        <td>
+          <select class="status-select status-${inc.status}" onchange="patchStatus(${inc.id}, this)">
+            <option value="New"      ${inc.status==='New'      ? 'selected':''}>🔵 New</option>
+            <option value="Assigned" ${inc.status==='Assigned' ? 'selected':''}>🟡 Assigned</option>
+            <option value="Resolved" ${inc.status==='Resolved' ? 'selected':''}>✅ Resolved</option>
+          </select>
+        </td>
+        <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(inc.created_at)}</td>
+      `;
+
+      // Insert at correct position
+      const targetPos = tbody.querySelectorAll('tr[data-id]')[idx];
+      if (targetPos) {
+        tbody.insertBefore(tr, targetPos);
+      } else {
+        tbody.appendChild(tr);
+      }
+    });
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── PATCH status ──────────────────────────────────────────────────────────
+  async function patchStatus(id, selectEl) {
+    const status = selectEl.value;
+    selectEl.className = `status-select status-${status}`;
+    try {
+      await fetch(`${API}/incident/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      // Update local cache so re-render is consistent
+      const item = allIncidents.find(i => i.id === id);
+      if (item) item.status = status;
+      updateStats(allIncidents);
+      toast(`Incident #${id} → ${status}`, 'success');
+    } catch (err) {
+      toast(`Failed to update #${id}: ${err.message}`, 'error');
+    }
+  }
+
+  // ── Poll loop ─────────────────────────────────────────────────────────────
+  async function poll() {
+    try {
+      allIncidents = await fetchIncidents();
+      updateStats(allIncidents);
+      renderTable();
+    } catch (err) {
+      toast('⚠ Could not reach API', 'error');
+    }
+  }
+
+  function startCountdown() {
+    clearInterval(countdown);
+    countdownSec = POLL_INTERVAL / 1000;
+    const el = document.getElementById('next-refresh');
+    el.textContent = `↻ in ${countdownSec}s`;
+    countdown = setInterval(() => {
+      countdownSec--;
+      el.textContent = countdownSec > 0 ? `↻ in ${countdownSec}s` : 'Refreshing…';
+      if (countdownSec <= 0) clearInterval(countdown);
+    }, 1000);
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  (async () => {
+    await loadShelters();
+    await poll();
+    startCountdown();
+
+    pollTimer = setInterval(async () => {
+      await poll();
+      startCountdown();
+    }, POLL_INTERVAL);
+  })();
+</script>
+</body>
+</html>
