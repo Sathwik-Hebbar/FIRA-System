@@ -830,6 +830,7 @@ tr:hover td { background: rgba(255, 255, 255, 0.025); }
 
 @media (max-width: 768px) {
   header { padding: 0 var(--space-md); }
+  .header-actions, .header-right { gap: 6px; }
 
   .stats-bar {
     grid-template-columns: repeat(3, 1fr);
@@ -837,9 +838,12 @@ tr:hover td { background: rgba(255, 255, 255, 0.025); }
   }
 
   .stat-value { font-size: 18px; }
+  #sidebar { width: 260px; }
 }
 
 @media (max-width: 480px) {
+  header { height: auto; min-height: 56px; padding-top: 10px; padding-bottom: 10px; }
+  .header-actions .btn:not(:first-child), .header-right .live-label, .header-right .next-refresh { display: none; }
   .stats-bar { grid-template-columns: repeat(2, 1fr); }
 
   .brand-name { font-size: 16px; }

@@ -7,15 +7,12 @@
   <meta name="description" content="Submit a citizen flood incident report to the FIRA emergency response system." />
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <!-- Shared FIRA stylesheet -->
   <link rel="stylesheet" href="css/style.css" />
 
   <style>
-    /* ── report.html page-specific ── */
-
     /* Two-column page grid */
     .page {
-      max-width: 900px; margin: 0 auto; padding: var(--space-xl) var(--space-lg);
+      max-width: 980px; margin: 0 auto; padding: var(--space-xl) var(--space-lg);
       display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
     }
     @media (max-width: 680px) { .page { grid-template-columns: 1fr; } }
@@ -41,7 +38,7 @@
     }
     .map-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
 
-    /* Result panel (shown after submit) */
+    /* Result panel */
     #result-card {
       display: none;
       grid-column: 1 / -1;
@@ -57,9 +54,13 @@
     .rs-value { font-size: 16px; font-weight: 700; }
     .priority-bar-wrap { margin-top: 16px; }
     .priority-bar-wrap label { font-size: 11px; color: var(--text-muted); }
+    .inline-row { display: flex; gap: 12px; }
+    .inline-row .form-group { flex: 1; }
   </style>
 </head>
 <body>
+
+<div id="nav"></div>
 
 <header>
   <a class="brand" href="index.html">
@@ -67,7 +68,6 @@
     <div class="brand-name">FI<span>RA</span></div>
   </a>
   <div style="display:flex;gap:8px">
-    <a href="dashboard.html" class="btn btn-ghost">📋 Dashboard</a>
     <a href="index.html" class="btn btn-ghost">← Map</a>
   </div>
 </header>
@@ -77,35 +77,71 @@
   <!-- Left: Form -->
   <div class="card">
     <div class="card-title">⚠️ Report a Flood Incident</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+      Reporting as: <strong id="reporter-name" style="color:var(--text)">…</strong>
+    </p>
     <form id="report-form" novalidate>
 
-      <div class="form-group">
-        <label>Full Name *</label>
-        <input id="f-name" type="text" placeholder="Your name" required />
+      <div class="inline-row">
+        <div class="form-group">
+          <label>
+            Severity *
+            <span id="severity-indicator"></span>
+          </label>
+          <select id="f-severity" required onchange="updateSeverityIndicator()">
+            <option value="">Select severity…</option>
+            <option value="1">1 – Minor (water on road)</option>
+            <option value="2">2 – Moderate (property at risk)</option>
+            <option value="3">3 – High (evacuation needed)</option>
+            <option value="4">4 – Severe (life-threatening)</option>
+            <option value="5">5 – Catastrophic</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Flood Type</label>
+          <select id="f-flood-type">
+            <option value="">Select…</option>
+            <option value="river">River flooding</option>
+            <option value="urban">Urban flash flood</option>
+            <option value="coastal">Coastal surge</option>
+            <option value="groundwater">Groundwater rise</option>
+          </select>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>Phone Number</label>
-        <input id="f-phone" type="tel" placeholder="+91 XXXXX XXXXX" />
+      <div class="inline-row">
+        <div class="form-group">
+          <label>Water Depth (m)</label>
+          <input id="f-depth" type="number" min="0" step="0.1" placeholder="e.g. 0.5" />
+        </div>
+        <div class="form-group">
+          <label>People Affected</label>
+          <input id="f-affected" type="number" min="0" placeholder="est. count" />
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>
-          Severity *
-          <span id="severity-indicator"></span>
-        </label>
-        <select id="f-severity" required onchange="updateSeverityIndicator()">
-          <option value="">Select severity…</option>
-          <option value="Low">Low – Minor flooding, no immediate danger</option>
-          <option value="Medium">Medium – Significant flooding, monitor closely</option>
-          <option value="High">High – Immediate danger, evacuation likely</option>
-          <option value="Critical">Critical – Life-threatening emergency</option>
-        </select>
+      <div class="inline-row">
+        <div class="form-group">
+          <label>People Trapped</label>
+          <input id="f-trapped" type="number" min="0" placeholder="0" />
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px;padding-top:28px">
+          <input id="f-medical" type="checkbox" style="width:16px;height:16px;cursor:pointer" />
+          <label for="f-medical" style="margin:0;font-size:13px;color:var(--text);text-transform:none;letter-spacing:0;font-weight:500">
+            🚑 Medical Emergency
+          </label>
+        </div>
       </div>
 
       <div class="form-group">
         <label>Description</label>
-        <textarea id="f-desc" placeholder="Describe the situation — mention if anyone is trapped, elderly, children, water rising, no power, etc."></textarea>
+        <textarea id="f-desc" placeholder="Describe the situation — water level, road access, hazards…"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Optional Image URL</label>
+        <input id="f-photo" type="url" placeholder="https://example.com/flood.jpg" />
       </div>
 
       <div class="submit-row">
@@ -140,8 +176,8 @@
         <div class="rs-value" id="r-score" style="color:#60a5fa">—</div>
       </div>
       <div class="result-stat">
-        <div class="rs-label">Severity</div>
-        <div class="rs-value" id="r-severity">—</div>
+        <div class="rs-label">Priority Level</div>
+        <div class="rs-value" id="r-level">—</div>
       </div>
       <div class="result-stat">
         <div class="rs-label">Assigned Shelter</div>
@@ -153,11 +189,11 @@
       </div>
     </div>
     <div class="priority-bar-wrap">
-      <label>Priority Score (out of 100)</label>
+      <label>Priority Score (0–1)</label>
       <div class="priority-bar"><div class="priority-fill" id="r-bar" style="width:0%"></div></div>
     </div>
     <div style="margin-top:16px;display:flex;gap:8px">
-      <a href="dashboard.html" class="btn btn-primary">📋 View All Incidents</a>
+      <a href="my-reports.html" class="btn btn-primary">📋 My Reports</a>
       <button class="btn btn-ghost" onclick="resetForm()">Submit Another</button>
     </div>
   </div>
@@ -165,8 +201,14 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="auth.js"></script>
 <script>
-  const API = 'http://localhost:8000';
+  // Enforce citizen login
+  const currentUser = window.auth.enforceAuth('citizen');
+  if (!currentUser) throw new Error('Not authenticated');
+
+  // Show reporter name
+  document.getElementById('reporter-name').textContent = currentUser.name || currentUser.sub || 'Citizen';
 
   // ── Map picker ───────────────────────────────────────────────────────────
   const pickMap = L.map('pick-map').setView([28.675, 77.10], 12);
@@ -189,12 +231,16 @@
     if (pinMarker) pickMap.removeLayer(pinMarker);
     pinMarker = L.marker([pickedLat, pickedLng], { icon: pinIcon })
       .bindPopup('<span style="color:#e2e8f0;font-size:12px">Incident location</span>')
-      .addTo(pickMap)
-      .openPopup();
+      .addTo(pickMap).openPopup();
   });
 
+  // Try to use user's stored location as default map center
+  if (currentUser.latitude && currentUser.longitude) {
+    pickMap.setView([currentUser.latitude, currentUser.longitude], 13);
+  }
+
   // ── Severity indicator ───────────────────────────────────────────────────
-  const SEV_COLORS = { Low: '#22c55e', Medium: '#eab308', High: '#f97316', Critical: '#ef4444' };
+  const SEV_COLORS = { '1': '#22c55e', '2': '#84cc16', '3': '#eab308', '4': '#f97316', '5': '#ef4444' };
   function updateSeverityIndicator() {
     const val = document.getElementById('f-severity').value;
     const el = document.getElementById('severity-indicator');
@@ -205,12 +251,16 @@
   // ── Form submit ──────────────────────────────────────────────────────────
   document.getElementById('report-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const name     = document.getElementById('f-name').value.trim();
-    const phone    = document.getElementById('f-phone').value.trim();
-    const severity = document.getElementById('f-severity').value;
-    const desc     = document.getElementById('f-desc').value.trim();
 
-    if (!name)     { alert('Please enter your name.'); return; }
+    const severity = parseInt(document.getElementById('f-severity').value);
+    const desc     = document.getElementById('f-desc').value.trim();
+    const floodType = document.getElementById('f-flood-type').value || null;
+    const depth    = parseFloat(document.getElementById('f-depth').value) || null;
+    const affected = parseInt(document.getElementById('f-affected').value) || null;
+    const trapped  = parseInt(document.getElementById('f-trapped').value) || null;
+    const medical  = document.getElementById('f-medical').checked;
+    const photoUrl = document.getElementById('f-photo').value.trim() || null;
+
     if (!severity) { alert('Please select a severity level.'); return; }
     if (!pickedLat){ alert('Please click the map to set the incident location.'); return; }
 
@@ -219,32 +269,50 @@
     btn.textContent = 'Submitting…';
 
     try {
-      const res = await fetch(`${API}/report`, {
+      const data = await window.auth.apiFetch('/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone: phone || null, lat: pickedLat, lng: pickedLng, severity, description: desc || null }),
+        body: JSON.stringify({
+          lat: pickedLat,
+          lng: pickedLng,
+          severity,
+          description: desc || null,
+          flood_type: floodType,
+          water_depth_m: depth,
+          people_affected: affected,
+          people_trapped: trapped,
+          medical_emergency: medical || null,
+          photo_url: photoUrl,
+        }),
       });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const data = await res.json();
       showResult(data);
     } catch (err) {
-      alert('Submission failed: ' + err.message);
+      alert(window.auth.errorMessage(err, 'We could not submit your report. Please try again.'));
       btn.disabled = false;
       btn.textContent = 'Submit Incident Report';
     }
   });
 
+  function levelColor(level) {
+    return { Critical: '#ef4444', High: '#f97316', Moderate: '#eab308', Low: '#22c55e' }[level] || '#60a5fa';
+  }
+
   function showResult(d) {
     document.getElementById('r-id').textContent      = `#${d.id}`;
-    document.getElementById('r-score').textContent   = d.priority_score.toFixed(1);
-    document.getElementById('r-severity').textContent = d.severity;
-    document.getElementById('r-shelter').textContent  = d.shelter_name || 'None assigned';
-    document.getElementById('r-status').textContent   = d.status;
+    document.getElementById('r-score').textContent   = (d.priority_score != null ? d.priority_score.toFixed(3) : '—');
+    document.getElementById('r-level').textContent   = d.priority_level || '—';
+    document.getElementById('r-shelter').textContent = d.shelter_name || 'None assigned';
+    document.getElementById('r-status').textContent  = d.status;
 
-    const pct = Math.min(d.priority_score, 100);
-    const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f97316' : pct >= 40 ? '#eab308' : '#22c55e';
-    document.getElementById('r-bar').style.width = pct + '%';
+    const score = d.priority_score || 0;
+    const pct   = Math.min(score * 100, 100);
+    const color = levelColor(d.priority_level);
+    document.getElementById('r-bar').style.width      = pct + '%';
     document.getElementById('r-bar').style.background = `linear-gradient(90deg, ${color}, #3b82f6)`;
+
+    if (d.priority_level) {
+      document.getElementById('r-level').style.color = color;
+    }
 
     document.getElementById('result-card').style.display = 'block';
     document.getElementById('result-card').scrollIntoView({ behavior: 'smooth' });
