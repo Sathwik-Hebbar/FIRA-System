@@ -106,6 +106,45 @@
 
     .score-bar { height: 6px; border-radius: 3px; background: var(--surface2); margin-top: 6px; overflow: hidden; }
     .score-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+
+    /* ── Voice SOS Extensions ── */
+    .source-badge {
+      padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 700;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .source-voice { background: rgba(168,85,247,0.18); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
+    .source-web   { background: rgba(148,163,184,0.15); color: #94a3b8; }
+
+    .filter-btn-group { display: flex; gap: 6px; align-items: center; }
+    .filter-btn {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      padding: 5px 12px; border-radius: 6px; cursor: pointer; transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: var(--border-mid); color: var(--text); }
+    .filter-btn.active {
+      background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #60a5fa;
+    }
+
+    .voice-intel-box {
+      background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.25);
+      border-radius: var(--radius); padding: 16px; margin-bottom: 20px;
+    }
+    .voice-tag-grid {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;
+    }
+    .voice-tag {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; padding: 4px 8px; font-size: 11px;
+    }
+    .voice-tag.highlight {
+      border-color: #ef4444; color: #f87171; background: rgba(239,68,68,0.08); font-weight: 700;
+    }
+    .transcript-box {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 12px; font-size: 12px; margin-top: 6px;
+      line-height: 1.5; color: var(--text);
+    }
   </style>
 </head>
 <body>
@@ -157,10 +196,23 @@
   </div>
 
   <!-- Incident Queue -->
-  <div class="section-title">
-    🚨 Incident Queue
-    <span class="count-badge" id="queue-count">0</span>
-    <button class="btn btn-ghost" style="margin-left:auto;font-size:12px" onclick="load()">↻ Refresh</button>
+  <div class="section-title" style="flex-wrap:wrap;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      🚨 Incident Queue
+      <span class="count-badge" id="queue-count">0</span>
+    </div>
+
+    <!-- Channel Filter -->
+    <div class="filter-btn-group" style="margin-left:auto">
+      <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All Incidents</button>
+      <button class="filter-btn" id="filter-voice" onclick="setFilter('VOICE_CALL')">📞 Voice SOS</button>
+      <button class="filter-btn" id="filter-web" onclick="setFilter('WEB')">💻 Web SOS</button>
+    </div>
+
+    <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.3)" onclick="openVoiceModal()">
+      🎙️ Test Voice Call
+    </button>
+    <button class="btn btn-ghost" style="font-size:12px" onclick="load()">↻ Refresh</button>
   </div>
 
   <div id="incident-list" class="incident-list">
@@ -201,6 +253,39 @@
       <div class="score-bar"><div class="score-fill" id="d-score-bar"></div></div>
     </div>
 
+    <!-- Voice SOS Intelligence Box -->
+    <div id="d-voice-box" class="voice-intel-box" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;color:#c084fc;display:flex;align-items:center;gap:6px">
+          🎙️ Multilingual AI Voice SOS Intelligence
+        </div>
+        <div id="d-voice-lang" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-muted)">
+          kn-IN
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <div class="dg-label">Original Speech Transcript (Kannada)</div>
+          <div class="transcript-box" id="d-voice-raw" style="min-height:54px">—</div>
+        </div>
+        <div>
+          <div class="dg-label">English Translation (Sarvam Saaras STT)</div>
+          <div class="transcript-box" id="d-voice-trans" style="min-height:54px;border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)">—</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div class="dg-label">AI Extracted Emergency Facts (Gemini 1.5 Flash)</div>
+        <div class="voice-tag-grid" id="d-voice-tags"></div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:10px;padding-top:8px;border-top:1px solid rgba(168,85,247,0.15)">
+        <div>Voice Session: <span id="d-voice-session-id" style="font-family:'JetBrains Mono',monospace">—</span></div>
+        <div id="d-voice-caller-type" style="font-weight:600">—</div>
+      </div>
+    </div>
+
     <!-- Response Actions -->
     <div class="action-row">
       <div class="form-group" style="flex:1;margin:0">
@@ -222,6 +307,60 @@
   </div>
 
 </main>
+
+<!-- Voice Call Simulator Modal -->
+<div id="voice-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--radius);max-width:580px;width:100%;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,0.6)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:800;color:#c084fc;display:flex;align-items:center;gap:8px">
+        🎙️ Voice SOS Call Simulator
+      </div>
+      <button class="btn btn-ghost" style="padding:4px 8px;font-size:14px" onclick="closeVoiceModal()">✕</button>
+    </div>
+
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
+      Simulates an incoming telephone emergency call to the FIRA helpline. Speech is processed through Sarvam Saaras STT translation, Gemini 1.5 fact extraction, phone-based citizen profile lookup, and the existing FIRA Priority Engine.
+    </p>
+
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Caller Phone Number</label>
+      <input id="vsim-phone" type="text" value="+91 98765 43210" style="width:100%" placeholder="+91 98765 43210" />
+      <span style="font-size:10px;color:var(--text-muted)">Matched against registered citizens in DB (e.g. Ramesh +91 98765 43210).</span>
+    </div>
+
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Language</label>
+      <select id="vsim-lang" style="width:100%">
+        <option value="kn-IN" selected>kn-IN (Kannada - ಕನ್ನಡ)</option>
+        <option value="en-IN">en-IN (English)</option>
+        <option value="hi-IN">hi-IN (Hindi - हिन्दी)</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-bottom:14px">
+      <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Caller Speech Statement</label>
+      <textarea id="vsim-text" rows="3" style="width:100%;font-size:13px;line-height:1.4">ನಮ್ಮ ಮನೆಗೆ ನೀರು ತುಂಬಿಕೊಂಡಿದೆ. ನಾವು ನಾಲ್ಕು ಜನ ಇದ್ದೇವೆ. ಇಬ್ಬರು ಮಕ್ಕಳು ಇದ್ದಾರೆ. ನನ್ನ ತಂದೆಗೆ ಕಾಲಿಗೆ ಗಾಯವಾಗಿದೆ. ನಾವು ಮನೆಯಿಂದ ಹೊರಗೆ ಬರಲು ಆಗುತ್ತಿಲ್ಲ.</textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button type="button" class="btn btn-ghost" style="font-size:10px;padding:3px 8px;border:1px solid var(--border)" onclick="setSample('kn_critical')">Sample: Kannada (4 Trapped + Injured Father)</button>
+        <button type="button" class="btn btn-ghost" style="font-size:10px;padding:3px 8px;border:1px solid var(--border)" onclick="setSample('en_flood')">Sample: English (5 Stranded + Children)</button>
+        <button type="button" class="btn btn-ghost" style="font-size:10px;padding:3px 8px;border:1px solid var(--border)" onclick="setSample('unregistered')">Sample: Unknown Caller (No DB match)</button>
+      </div>
+    </div>
+
+    <div id="vsim-response" style="display:none;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:6px;padding:12px;margin-bottom:14px;font-size:12px">
+      <div style="font-weight:700;color:#c084fc;margin-bottom:4px">🔊 AI Voice Agent Audio Response:</div>
+      <div id="vsim-audio-msg" style="font-style:italic;color:var(--text);margin-bottom:6px"></div>
+      <div style="font-size:11px;color:var(--text-muted)" id="vsim-meta"></div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-ghost" onclick="closeVoiceModal()">Close</button>
+      <button class="btn btn-primary" id="vsim-submit-btn" style="background:#9333ea;border-color:#a855f7" onclick="submitVoiceSimulation()">
+        📞 Send Emergency Call
+      </button>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -287,6 +426,10 @@
       inc.flood_type     && escHtml(inc.flood_type),
     ].filter(Boolean).join(' · ');
 
+    const sourceBadge = inc.source === 'VOICE_CALL'
+      ? `<span class="source-badge source-voice">📞 Voice Call</span>`
+      : `<span class="source-badge source-web">💻 Web</span>`;
+
     return `
       <div class="inc-card${isSelected}" data-id="${inc.id}" onclick="selectIncident(${inc.id})">
         <div class="inc-rank" style="color:${color}">#${rank}</div>
@@ -294,6 +437,7 @@
           <div class="inc-top">
             <span class="inc-id">#${inc.id}</span>
             <span class="inc-name">${escHtml(inc.name)}</span>
+            ${sourceBadge}
             <span class="status-pill ${sClass}">${inc.status.replace('_',' ')}</span>
             ${inc.priority_level ? `<span class="priority-badge ${pClass}">${inc.priority_level}</span>` : ''}
           </div>
@@ -347,6 +491,35 @@
     document.getElementById('d-score').style.color     = color;
     document.getElementById('d-score-bar').style.width = `${Math.min(score * 100, 100)}%`;
     document.getElementById('d-score-bar').style.background = `linear-gradient(90deg, ${color}, #3b82f6)`;
+
+    // Populate Voice SOS Intelligence
+    const vb = document.getElementById('d-voice-box');
+    if (inc.source === 'VOICE_CALL' || inc.voice_details) {
+      vb.style.display = 'block';
+      const vd = inc.voice_details || {};
+      document.getElementById('d-voice-lang').textContent = vd.language || 'kn-IN';
+      document.getElementById('d-voice-raw').textContent  = vd.transcript || '(Audio call recording)';
+      document.getElementById('d-voice-trans').textContent = vd.translated_transcript || 'N/A';
+      document.getElementById('d-voice-session-id').textContent = vd.session_id || inc.voice_session_id || '—';
+      document.getElementById('d-voice-caller-type').textContent = inc.reported_by ? '✅ Verified Citizen' : '⚠️ Unverified Caller';
+
+      // Build facts tags
+      const ext = vd.extracted_data || {};
+      const tags = [];
+      if (ext.trapped) tags.push(`<span class="voice-tag highlight">🔴 Trapped</span>`);
+      if (ext.injured) tags.push(`<span class="voice-tag highlight">🚑 Injured</span>`);
+      if (ext.medical_emergency) tags.push(`<span class="voice-tag highlight">🚨 Medical Emergency</span>`);
+      if (ext.people_count != null) tags.push(`<span class="voice-tag">👥 ${ext.people_count} People</span>`);
+      if (ext.children_count != null) tags.push(`<span class="voice-tag">👶 ${ext.children_count} Children</span>`);
+      if (ext.elderly_count != null) tags.push(`<span class="voice-tag">👵 ${ext.elderly_count} Elderly</span>`);
+      if (ext.rescue_required) tags.push(`<span class="voice-tag highlight">🚤 Rescue Required</span>`);
+      if (ext.water_level) tags.push(`<span class="voice-tag">🌊 Water: ${escHtml(ext.water_level)}</span>`);
+      if (ext.location_description) tags.push(`<span class="voice-tag">📍 Landmark: ${escHtml(ext.location_description)}</span>`);
+
+      document.getElementById('d-voice-tags').innerHTML = tags.length ? tags.join('') : '<span style="font-size:11px;color:var(--text-muted)">No specific vulnerability tags extracted</span>';
+    } else {
+      vb.style.display = 'none';
+    }
 
     document.getElementById('detail-panel').classList.add('show');
     document.getElementById('action-feedback').style.display = 'none';
@@ -406,21 +579,101 @@
     }
   }
 
+  // ── Filter State ──────────────────────────────────────────────────────────
+  let currentFilter = 'all';
+
+  function setFilter(type) {
+    currentFilter = type;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    if (type === 'all') document.getElementById('filter-all').classList.add('active');
+    else if (type === 'VOICE_CALL') document.getElementById('filter-voice').classList.add('active');
+    else if (type === 'WEB') document.getElementById('filter-web').classList.add('active');
+    renderQueue();
+  }
+
   // ── Render queue ──────────────────────────────────────────────────────────
   function renderQueue() {
     const list = document.getElementById('incident-list');
-    const unresolved = allIncidents.filter(i => i.status !== 'resolved');
-    const resolved   = allIncidents.filter(i => i.status === 'resolved');
+    let filtered = allIncidents;
+    if (currentFilter !== 'all') {
+      filtered = allIncidents.filter(i => (i.source || 'WEB') === currentFilter);
+    }
+
+    const unresolved = filtered.filter(i => i.status !== 'resolved');
+    const resolved   = filtered.filter(i => i.status === 'resolved');
     const ordered = [...unresolved, ...resolved];
 
-    document.getElementById('queue-count').textContent = allIncidents.length;
+    document.getElementById('queue-count').textContent = filtered.length;
 
-    if (allIncidents.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="es-icon">✅</div><p>No incidents yet. Submit a report from the citizen portal.</p></div>`;
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="es-icon">✅</div><p>No incidents found matching current filter.</p></div>`;
       return;
     }
 
     list.innerHTML = ordered.map((inc, i) => renderCard(inc, i + 1)).join('');
+  }
+
+  // ── Voice Simulation Modal ─────────────────────────────────────────────────
+  function openVoiceModal() {
+    document.getElementById('voice-modal').style.display = 'flex';
+    document.getElementById('vsim-response').style.display = 'none';
+  }
+
+  function closeVoiceModal() {
+    document.getElementById('voice-modal').style.display = 'none';
+  }
+
+  function setSample(type) {
+    if (type === 'kn_critical') {
+      document.getElementById('vsim-phone').value = '+91 98765 43210';
+      document.getElementById('vsim-lang').value = 'kn-IN';
+      document.getElementById('vsim-text').value = 'ನಮ್ಮ ಮನೆಗೆ ನೀರು ತುಂಬಿಕೊಂಡಿದೆ. ನಾವು ನಾಲ್ಕು ಜನ ಇದ್ದೇವೆ. ಇಬ್ಬರು ಮಕ್ಕಳು ಇದ್ದಾರೆ. ನನ್ನ ತಂದೆಗೆ ಕಾಲಿಗೆ ಗಾಯವಾಗಿದೆ. ನಾವು ಮನೆಯಿಂದ ಹೊರಗೆ ಬರಲು ಆಗುತ್ತಿಲ್ಲ.';
+    } else if (type === 'en_flood') {
+      document.getElementById('vsim-phone').value = '+91 98765 43210';
+      document.getElementById('vsim-lang').value = 'en-IN';
+      document.getElementById('vsim-text').value = 'Our area is deeply flooded with chest high water. 5 people stranded on terrace, including two children. We need a rescue boat urgently.';
+    } else if (type === 'unregistered') {
+      document.getElementById('vsim-phone').value = '+91 91234 56789';
+      document.getElementById('vsim-lang').value = 'kn-IN';
+      document.getElementById('vsim-text').value = 'ತುರ್ತು ಸಹಾಯ ಬೇಕು! ನೀರು ಮನೆಗೆ ನುಗ್ಗಿದೆ, ನಾವು ಅಪಾಯದಲ್ಲಿದ್ದೇವೆ.';
+    }
+  }
+
+  async function submitVoiceSimulation() {
+    const btn = document.getElementById('vsim-submit-btn');
+    const phone = document.getElementById('vsim-phone').value.trim();
+    const lang = document.getElementById('vsim-lang').value;
+    const text = document.getElementById('vsim-text').value.trim();
+
+    if (!phone) { toast('Please enter a caller phone number', 'error'); return; }
+    if (!text) { toast('Please enter speech text', 'error'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Processing Call…';
+    try {
+      const resp = await window.auth.apiFetch('/api/voice-sos/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caller_phone: phone,
+          transcript: text,
+          language: lang,
+        }),
+      });
+
+      document.getElementById('vsim-response').style.display = 'block';
+      document.getElementById('vsim-audio-msg').textContent = `"${resp.response_speech_text}"`;
+      document.getElementById('vsim-meta').textContent = `Created SOS #${resp.sos_id} · Priority: ${resp.priority?.level || 'N/A'} (Score ${resp.priority?.score || 0}) · Caller: ${resp.citizen_name || 'Unverified'}`;
+
+      toast(`Voice SOS incident #${resp.sos_id} created successfully!`, 'success');
+      await load();
+      selectIncident(resp.sos_id);
+    } catch (err) {
+      toast(window.auth.errorMessage(err, 'Failed to process voice simulation'), 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📞 Send Emergency Call';
+    }
   }
 
   // ── Load incidents ─────────────────────────────────────────────────────────

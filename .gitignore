@@ -18,6 +18,8 @@ backend/fira.db
 # Environment variables & secrets
 .env
 .env.*
+backend/.env
+**/.env
 
 # OS and Editor files
 .DS_Store

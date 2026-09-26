@@ -72,10 +72,23 @@ class Report(Base):
 
     # --- Computed / assigned fields ---
     priority_score = Column(Float, nullable=True)         # Set by priority_engine
+    # Canonical incident-processing audit trail. JSON is stored as text to keep
+    # the SQLite MVP migration-free while retaining the complete payload.
+    raw_input = Column(String, nullable=True)
+    normalized_data = Column(String, nullable=True)
+    risk_score = Column(Float, nullable=True)
+    risk_level = Column(String, nullable=True)
+    priority_reasons = Column(String, nullable=True)
+    ai_analysis = Column(String, nullable=True)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     # Workflow status: reported → prioritized → assigned → in_progress → resolved
     status = Column(String, default="reported")
     shelter_id = Column(Integer, ForeignKey("shelters.id"), nullable=True)
     assigned_resource = Column(String, nullable=True)     # free-text resource name
+
+    # --- Channel & Voice Integration ---
+    source = Column(String, default="WEB", nullable=False)  # 'WEB', 'MOBILE', 'VOICE_CALL'
+    voice_session_id = Column(String, ForeignKey("voice_sessions.id"), nullable=True)
 
     # --- Timestamps ---
     created_at = Column(
@@ -84,6 +97,36 @@ class Report(Base):
         nullable=False,
     )
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class VoiceSession(Base):
+    """
+    An emergency voice call session.
+    Maintains caller metadata, language, timestamps, raw & translated transcripts,
+    extracted facts, conversation state, and linkage to the created Report incident.
+    """
+
+    __tablename__ = "voice_sessions"
+
+    id = Column(String, primary_key=True, index=True)  # UUID or telephony Call SID
+    citizen_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    caller_phone = Column(String, nullable=False, index=True)
+    language = Column(String, default="kn-IN", nullable=False)
+
+    started_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+
+    transcript = Column(String, nullable=True)
+    translated_transcript = Column(String, nullable=True)
+    extracted_data = Column(String, nullable=True)  # JSON-serialized EmergencyExtraction
+    raw_payload = Column(String, nullable=True)  # Original webhook/API payload for safe debugging
+    conversation_history = Column(String, nullable=True)  # JSON-serialized message history
+    status = Column(String, default="VOICE_SESSION_STARTED", nullable=False)
+    incident_id = Column(Integer, ForeignKey("reports.id"), nullable=True)
 
 
 class Shelter(Base):

@@ -97,6 +97,15 @@ def _seed_demo_users(db: Session) -> None:
             "latitude": None,
             "longitude": None,
         },
+        {
+            "name": "Ramesh Gowda",
+            "email": "ramesh@fira.demo",
+            "password": "Demo@123",
+            "role": "citizen",
+            "phone": "+91 98765 43210",
+            "latitude": 12.9716,
+            "longitude": 77.5946,
+        },
     ]
 
     created = 0

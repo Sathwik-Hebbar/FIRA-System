@@ -161,6 +161,7 @@
       <div class="report-card">
         <div class="report-header">
           <span class="report-id">#${r.id}</span>
+          ${r.source === 'VOICE_CALL' ? '<span style="font-size:10px;padding:2px 7px;border-radius:100px;background:rgba(168,85,247,0.18);color:#c084fc;font-weight:700">📞 Voice</span>' : ''}
           <span class="status-pill ${sClass}">${r.status.replace('_', ' ')}</span>
           ${r.priority_level ? `<span class="priority-badge ${pClass}">${r.priority_level}</span>` : ''}
           ${r.priority_score != null ? `<span style="font-size:11px;color:${color}">Score: ${r.priority_score.toFixed(3)}</span>` : ''}

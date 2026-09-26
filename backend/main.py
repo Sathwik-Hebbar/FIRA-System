@@ -6,6 +6,7 @@ Combines the complete Authentication System (JWT, bcrypt, role-based access)
 with the explainable Risk Scoring Engine and Multi-Signal Priority Engine.
 """
 
+import json
 import logging
 import math
 import os
@@ -21,16 +22,23 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from database import Base, SessionLocal, engine, get_db
-from models import Report, Shelter, User, Zone
+# Load project configuration before importing services that capture API keys
+# when their singleton clients are constructed.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+from database import Base, SessionLocal, engine, ensure_schema_migrations, get_db
+from models import Report, Shelter, User, VoiceSession, Zone
 from priority_engine import compute_priority, compute_report_priority, priority_level
 from risk_engine import bump_rainfall, compute_risk
+from routes_voice import router as voice_router
+from schemas.voice_sos import EmergencyExtraction, VoiceCitizenProfile
+from services.incident_processor import process_incident
 from security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     authenticate_user,
@@ -41,10 +49,6 @@ from security import (
     require_role,
 )
 from seed_data import seed_if_empty
-
-# Load environment variables
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-load_dotenv(Path(__file__).resolve().parent / ".env")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +62,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("FIRA startup: initialising database and seed data…")
     Base.metadata.create_all(bind=engine)
+    ensure_schema_migrations()
 
     db = SessionLocal()
     try:
@@ -88,6 +93,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register Voice SOS Router
+app.include_router(voice_router)
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +170,9 @@ class ReportResponse(BaseModel):
     shelter_name: Optional[str] = None
     assigned_resource: Optional[str] = None
     photo_url: Optional[str] = None
+    source: Optional[str] = "WEB"
+    voice_session_id: Optional[str] = None
+    voice_details: Optional[Dict[str, Any]] = None
     created_at: datetime
 
     class Config:
@@ -225,6 +236,27 @@ def _enrich_report(report: Report, db: Session) -> dict:
     if report.shelter_id:
         sh = db.query(Shelter).filter(Shelter.id == report.shelter_id).first()
         shelter_name = sh.name if sh else None
+
+    voice_details = None
+    v_sid = getattr(report, "voice_session_id", None)
+    if v_sid:
+        vs = db.query(VoiceSession).filter(VoiceSession.id == v_sid).first()
+        if vs:
+            extracted = None
+            if vs.extracted_data:
+                try:
+                    extracted = json.loads(vs.extracted_data)
+                except Exception:
+                    pass
+            voice_details = {
+                "session_id": vs.id,
+                "language": vs.language,
+                "transcript": vs.transcript,
+                "translated_transcript": vs.translated_transcript,
+                "extracted_data": extracted,
+                "status": vs.status,
+            }
+
     return {
         "id": report.id,
         "name": report.name,
@@ -241,11 +273,18 @@ def _enrich_report(report: Report, db: Session) -> dict:
         "medical_emergency": report.medical_emergency,
         "priority_score": report.priority_score,
         "priority_level": priority_level(report.priority_score) if report.priority_score is not None else None,
+        "risk_score": getattr(report, "risk_score", None),
+        "risk_level": getattr(report, "risk_level", None),
+        "priority_reasons": json.loads(report.priority_reasons) if getattr(report, "priority_reasons", None) else [],
+        "normalized_incident": json.loads(report.normalized_data) if getattr(report, "normalized_data", None) else None,
         "status": report.status,
         "shelter_id": report.shelter_id,
         "shelter_name": shelter_name,
         "assigned_resource": report.assigned_resource,
         "photo_url": report.photo_url,
+        "source": getattr(report, "source", "WEB") or "WEB",
+        "voice_session_id": v_sid,
+        "voice_details": voice_details,
         "created_at": report.created_at,
     }
 
@@ -452,9 +491,13 @@ def create_report(
     db.add(report)
     db.flush()
 
-    # Compute priority using the explainable Priority Engine
-    score = compute_report_priority(report, env_risk)
-    report.priority_score = score
+    # Web reports use the same persisted canonical pipeline as Voice SOS.
+    process_incident(
+        db, source="WEB", raw_input=req.model_dump(),
+        extraction=EmergencyExtraction(incident_type=req.flood_type or "FLOOD", trapped=bool(req.people_trapped), people_count=req.people_affected, medical_emergency=req.medical_emergency, water_depth_m=req.water_depth_m),
+        citizen=VoiceCitizenProfile(id=current_user.id, name=current_user.name, phone=current_user.phone or "UNKNOWN", language="en-IN", latitude=req.lat, longitude=req.lng, is_verified=True),
+        location={"lat": req.lat, "lng": req.lng, "source": "WEB_GPS"}, location_risk=env_risk, report=report,
+    )
     report.status = "prioritized"
 
     # Assign nearest shelter
@@ -595,6 +638,71 @@ def command_stats(
         "resolved_today": resolved_today,
         "total": len(all_reports),
     }
+
+
+# ---------------------------------------------------------------------------
+# Telephony Root Endpoints (Twilio & Vobiz)
+# ---------------------------------------------------------------------------
+
+@app.post("/twilio/voice")
+@app.post("/voice/twilio")
+async def root_twilio_voice(request: Request, db: Session = Depends(get_db)):
+    from routes_voice import handle_twilio_voice
+    return await handle_twilio_voice(request, db)
+
+
+@app.post("/voice/incoming")
+@app.post("/twilio/voice-gather")
+async def root_voice_incoming(request: Request, db: Session = Depends(get_db)):
+    from routes_voice import voice_incoming_call
+    return await voice_incoming_call(request, db)
+
+
+@app.post("/voice/turn")
+async def root_voice_turn(request: Request, db: Session = Depends(get_db)):
+    from routes_voice import voice_conversation_turn
+    return await voice_conversation_turn(request, db)
+
+
+@app.post("/voice/outbound")
+async def root_voice_outbound(request: Request, db: Session = Depends(get_db)):
+    from routes_voice import outbound_voice_webhook
+    return await outbound_voice_webhook(request, db)
+
+
+@app.post("/twilio/status")
+async def root_twilio_status(request: Request, db: Session = Depends(get_db)):
+    from routes_voice import handle_telephony_hangup
+    return await handle_telephony_hangup(request, db)
+
+
+@app.post("/answer")
+async def root_vobiz_answer(request: Request, db: Session = Depends(get_db)):
+    from routes_voice import handle_telephony_answer
+    return await handle_telephony_answer(request, db, provider="auto")
+
+
+@app.post("/hangup")
+async def root_vobiz_hangup(request: Request, db: Session = Depends(get_db)):
+    from routes_voice import handle_telephony_hangup
+    return await handle_telephony_hangup(request, db)
+
+
+@app.post("/stream-status")
+async def root_vobiz_stream_status(request: Request):
+    from routes_voice import handle_vobiz_stream_status
+    return await handle_vobiz_stream_status(request)
+
+
+@app.websocket("/ws")
+@app.websocket("/twilio/stream")
+async def root_telephony_ws(websocket: WebSocket):
+    from routes_voice import handle_telephony_websocket
+    db = SessionLocal()
+    try:
+        await handle_telephony_websocket(websocket, db)
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------
