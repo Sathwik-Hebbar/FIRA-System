@@ -3,135 +3,201 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FIRA – Login</title>
-  <meta name="description" content="Sign in to the FIRA Flood Intelligence & Response Application." />
-  <link rel="stylesheet" href="css/style.css" />
+  <title>FIRA – Emergency Operations & Citizen Access</title>
+  <meta name="description" content="Secure authentication gateway for FIRA Flood Intelligence & Emergency Response platform." />
+  <link rel="stylesheet" href="css/style.css?v=2.2" />
   <style>
     body {
-      display: flex; align-items: center; justify-content: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       min-height: 100vh;
-      background: radial-gradient(ellipse at 50% 0%, rgba(6,182,212,0.16) 0%, transparent 58%),
-                  var(--bg);
+      background: radial-gradient(circle at 50% 0%, rgba(29, 78, 216, 0.08) 0%, rgba(248, 250, 252, 1) 65%);
+      padding: var(--space-md);
     }
 
     .login-wrap {
-      width: 100%; max-width: 400px;
-      padding: var(--space-lg);
+      width: 100%;
+      max-width: 420px;
     }
 
     .login-brand {
-      text-align: center; margin-bottom: var(--space-xl);
+      text-align: center;
+      margin-bottom: var(--space-xl);
     }
-    .login-brand .brand-icon { font-size: 48px; display: block; margin-bottom: 8px; }
-    .login-brand h1 { font-size: 28px; font-weight: 800; margin: 0; }
-    .login-brand p  { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
-    .login-eyebrow { color: var(--teal); font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 8px; }
+
+    .login-brand .brand-icon {
+      margin: 0 auto 14px auto;
+      width: 52px;
+      height: 52px;
+      font-size: 26px;
+      border-radius: var(--radius);
+      box-shadow: 0 10px 24px rgba(29, 78, 216, 0.22);
+    }
+
+    .login-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: var(--green-subtle);
+      border: 1px solid var(--green-border);
+      border-radius: 100px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .login-eyebrow .pulse-dot {
+      width: 7px;
+      height: 7px;
+    }
+
+    .login-brand h1 {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--accent-deep);
+      letter-spacing: -0.03em;
+    }
+
+    .login-brand p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
 
     .login-card {
-      background: var(--surface);
+      position: relative;
+      background: #ffffff;
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: var(--space-xl);
-      box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+      padding: 32px 28px;
+      box-shadow: var(--shadow-lg);
     }
 
-    .form-group { margin-bottom: 16px; }
-    .form-group label { display: block; font-size: 12px; font-weight: 600;
-                        color: var(--text-muted); text-transform: uppercase;
-                        letter-spacing: 0.5px; margin-bottom: 6px; }
-    .form-group input {
-      width: 100%; padding: 10px 14px;
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); color: var(--text); font-size: 14px;
-      transition: border-color 0.2s;
-      box-sizing: border-box;
+    .login-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 28px; right: 28px;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), #2dd4bf);
+      border-radius: 0 0 4px 4px;
     }
-    .form-group input:focus { outline: none; border-color: var(--accent); }
+
+    .login-card-header { margin-bottom: 24px; }
+    .login-card-header h2 { font-size: 18px; }
+    .login-card-header p { margin-top: 4px; color: var(--text-muted); font-size: 13px; }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 7px;
+    }
+
+    .form-group input {
+      padding: 12px 14px;
+      font-size: 14px;
+      border: 1px solid var(--border-mid);
+      border-radius: var(--radius-sm);
+    }
+
+    .form-group input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-subtle);
+    }
 
     #login-btn {
-      width: 100%; padding: 12px;
-      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-      border: none; border-radius: var(--radius-sm);
-      color: #fff; font-size: 15px; font-weight: 700;
-      cursor: pointer; transition: opacity 0.2s;
+      width: 100%;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 700;
       margin-top: 8px;
     }
-    #login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    #login-btn:not(:disabled):hover { opacity: 0.9; }
 
     .error-msg {
       display: none;
-      background: rgba(239,68,68,0.12);
-      border: 1px solid rgba(239,68,68,0.3);
+      background: #fee2e2;
+      border: 1px solid #fecaca;
       border-radius: var(--radius-sm);
-      color: #f87171;
+      color: #b91c1c;
       padding: 10px 14px;
       font-size: 13px;
-      margin-bottom: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
       text-align: center;
     }
-    .error-msg.show { display: block; }
 
-    .demo-hint {
-      margin-top: 20px;
-      padding: 14px;
-      background: rgba(59,130,246,0.08);
-      border: 1px solid rgba(59,130,246,0.2);
-      border-radius: var(--radius-sm);
-      font-size: 12px;
-      color: var(--text-muted);
+    .error-msg.show {
+      display: block;
     }
-    .demo-hint strong { color: var(--text); display: block; margin-bottom: 8px; font-size: 11px;
-                        text-transform: uppercase; letter-spacing: 0.5px; }
-    .demo-hint .demo-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-    .demo-hint code { color: #60a5fa; font-size: 11px; }
-    .demo-fill { color: #60a5fa; cursor: pointer; text-decoration: underline; font-size: 11px; }
+
+    .login-footer {
+      text-align: center;
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .login-footer strong {
+      color: var(--accent);
+    }
   </style>
 </head>
 <body>
 
 <div class="login-wrap">
   <div class="login-brand">
-    <span class="brand-icon">🌊</span>
-    <div class="login-eyebrow">Emergency operations access</div>
-    <h1>FIRA</h1>
-    <p>Flood intelligence and coordinated response</p>
+    <div class="brand-icon">🌊</div>
+    <div class="login-eyebrow">
+      <div class="pulse-dot"></div>
+      Secure Emergency Network
+    </div>
+    <h1>FIRA Intelligence</h1>
+    <p>Flood Incident & Response Coordination Platform</p>
   </div>
 
   <div class="login-card">
     <div id="error-msg" class="error-msg" role="alert"></div>
+    <div class="login-card-header">
+      <h2>Sign in to FIRA</h2>
+      <p>Use your registered citizen or response-team account.</p>
+    </div>
 
     <form id="login-form" novalidate>
       <div class="form-group">
-        <label for="email">Email</label>
-        <input id="email" type="email" placeholder="you@example.com" autocomplete="email" required />
+        <label for="email">Account Email</label>
+        <input id="email" type="email" placeholder="name@organization.gov" autocomplete="email" required />
       </div>
       <div class="form-group">
         <label for="password">Password</label>
-        <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+        <input id="password" type="password" placeholder="••••••••••••" autocomplete="current-password" required />
       </div>
-      <button type="submit" id="login-btn">Login</button>
+      <button type="submit" id="login-btn" class="btn btn-primary">Sign In</button>
     </form>
 
-    <div class="demo-hint">
-      <strong>Demo Credentials</strong>
-      <div class="demo-row">
-        <span>Citizen:</span>
-        <code>citizen@floodguard.demo</code>
-        <span class="demo-fill" onclick="fillCitizen()">Fill</span>
-      </div>
-      <div class="demo-row">
-        <span>Command:</span>
-        <code>command@floodguard.demo</code>
-        <span class="demo-fill" onclick="fillCommand()">Fill</span>
-      </div>
-      <div style="margin-top:6px">Password: <code>Demo@123</code></div>
+    <div class="login-footer">
+      <div>Authorized Response Teams & Citizens</div>
+      <div style="margin-top: 4px;">Emergency Helpline: <strong>+91 80715 79681</strong></div>
     </div>
   </div>
 </div>
 
 <script>
-  const API = 'http://localhost:8000';
+  const API = /^https?:$/.test(window.location.protocol)
+    ? window.location.origin
+    : 'http://localhost:8000';
 
   // If already logged in, redirect
   (function () {
@@ -162,19 +228,9 @@
     el.textContent = msg;
     el.classList.add('show');
   }
+
   function hideError() {
     document.getElementById('error-msg').classList.remove('show');
-  }
-
-  function fillCitizen() {
-    document.getElementById('email').value = 'citizen@floodguard.demo';
-    document.getElementById('password').value = 'Demo@123';
-    hideError();
-  }
-  function fillCommand() {
-    document.getElementById('email').value = 'command@floodguard.demo';
-    document.getElementById('password').value = 'Demo@123';
-    hideError();
   }
 
   document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -190,7 +246,7 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('Please enter a valid email address.'); return; }
 
     btn.disabled = true;
-    btn.textContent = 'Logging in…';
+    btn.textContent = 'Verifying credentials…';
 
     try {
       const res = await fetch(`${API}/auth/login`, {
@@ -206,7 +262,6 @@
 
       const data = await res.json();
       localStorage.setItem('fira_token', data.access_token);
-      // Decode JWT for local use
       const payload = JSON.parse(atob(data.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
       const userObj = { ...data.user, ...payload };
       localStorage.setItem('fira_user', JSON.stringify(userObj));
@@ -214,15 +269,15 @@
       redirect(data.user.role);
 
     } catch (err) {
-      let msg = err.message || 'Login failed. Please try again.';
+      let msg = err.message || 'Login failed. Please verify your credentials.';
       if (msg.toLowerCase().includes('incorrect') || msg === '401 Unauthorized') {
         msg = 'Invalid email or password.';
       } else if (msg.includes('fetch') || msg.includes('NetworkError') || msg.includes('Failed')) {
-        msg = 'Cannot reach server. Is the backend running?';
+        msg = 'Cannot reach server. Please ensure the backend service is running.';
       }
       showError(msg);
       btn.disabled = false;
-      btn.textContent = 'Login';
+      btn.textContent = 'Sign In';
     }
   });
 </script>

@@ -7,21 +7,27 @@
   <meta name="description" content="Live FIRA incident command dashboard. Monitor and triage flood reports by priority." />
 
   <!-- Shared FIRA stylesheet -->
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=2.2" />
 
   <style>
     /* ── dashboard.html page-specific ── */
-    main { padding: var(--space-lg); }
-
-    /* Row entrance animation */
-    .row-enter { animation: rowIn 0.3s ease forwards; }
+    .dashboard-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: var(--space-xl) var(--space-lg);
+    }
+    .filters {
+      margin-bottom: var(--space-md);
+    }
   </style>
 
 </head>
 <body class="dashboard">
 
+<div id="nav"></div>
+
 <header>
-  <a class="brand" href="index.html">
+  <a class="brand" href="dashboard.html">
     <div class="brand-icon">🌊</div>
     <div class="brand-name">FI<span>RA</span></div>
   </a>
@@ -29,10 +35,20 @@
     <div class="pulse-dot"></div>
     <span class="live-label">LIVE</span>
     <span class="next-refresh" id="next-refresh">—</span>
-    <a href="report.html" class="btn btn-primary">⚠️ New Report</a>
+    <a href="command.html" class="btn btn-primary">🚨 Incident Queue</a>
     <a href="index.html" class="btn btn-ghost">🗺 Map</a>
   </div>
 </header>
+
+<div class="dashboard-container">
+
+<section class="page-intro" style="margin-bottom:26px">
+  <div>
+    <div class="page-kicker">Operations overview</div>
+    <h1>Response dashboard</h1>
+  </div>
+  <p>Live view of reported flood incidents and response activity.</p>
+</section>
 
 <!-- Stats bar -->
 <div class="stats-bar">
@@ -41,7 +57,7 @@
     <div class="stat-value" id="st-total" style="color:var(--text)">—</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">New</div>
+    <div class="stat-label">Awaiting Dispatch</div>
     <div class="stat-value" id="st-new" style="color:var(--accent)">—</div>
   </div>
   <div class="stat-card">
@@ -62,13 +78,13 @@
   </div>
 </div>
 
-<main>
+<main style="padding:0">
   <!-- Filter bar -->
   <div class="filters">
     <button class="filter-btn active" id="f-all"      onclick="setFilter('all')">All</button>
-    <button class="filter-btn" id="f-New"             onclick="setFilter('New')">New</button>
-    <button class="filter-btn" id="f-Assigned"        onclick="setFilter('Assigned')">Assigned</button>
-    <button class="filter-btn" id="f-Resolved"        onclick="setFilter('Resolved')">Resolved</button>
+    <button class="filter-btn" id="f-reported"        onclick="setFilter('reported')">Reported</button>
+    <button class="filter-btn" id="f-assigned"        onclick="setFilter('assigned')">Assigned</button>
+    <button class="filter-btn" id="f-resolved"        onclick="setFilter('resolved')">Resolved</button>
     <button class="filter-btn" id="f-Critical"        onclick="setFilter('Critical')">Critical</button>
     <button class="filter-btn" id="f-High"            onclick="setFilter('High')">High</button>
   </div>
@@ -100,10 +116,11 @@
     </div>
   </div>
 </main>
+</div> <!-- /.dashboard-container -->
 
 <div id="toast"></div>
 
-<script src="auth.js"></script>
+<script src="auth.js?v=2.2"></script>
 <script>
   const currentUser = window.auth.enforceAuth('command_center');
   if (!currentUser) throw new Error('Not authenticated');
@@ -134,10 +151,10 @@
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function priorityColor(score) {
-    if (score >= 90) return '#ef4444';
-    if (score >= 70) return '#f97316';
-    if (score >= 40) return '#eab308';
-    return '#22c55e';
+    if (score >= 0.75) return '#dc2626';
+    if (score >= 0.50) return '#ea580c';
+    if (score >= 0.25) return '#d97706';
+    return '#059669';
   }
 
   function fmtDate(iso) {
@@ -169,19 +186,23 @@
 
   // ── Update stats bar ──────────────────────────────────────────────────────
   function updateStats(incidents) {
-    const total    = incidents.length;
-    const newC     = incidents.filter(i => i.status === 'New').length;
-    const assigned = incidents.filter(i => i.status === 'Assigned').length;
-    const resolved = incidents.filter(i => i.status === 'Resolved').length;
-    const critical = incidents.filter(i => i.severity === 'Critical').length;
-    const avg      = total ? (incidents.reduce((s,i) => s + i.priority_score, 0) / total).toFixed(1) : '—';
+    const total = incidents.length;
+    const reported = incidents.filter(i => i.status === 'reported' || i.status === 'prioritized').length;
+    const assigned = incidents.filter(i => i.status === 'assigned' || i.status === 'in_progress').length;
+    const resolved = incidents.filter(i => i.status === 'resolved').length;
+    const critical = incidents.filter(i => i.priority_level === 'Critical').length;
+    const average = total
+      ? (incidents.reduce((sum, item) => sum + (Number(item.priority_score) || 0), 0) / total).toFixed(3)
+      : '—';
 
-    document.getElementById('st-total').textContent    = total;
-    document.getElementById('st-new').textContent      = newC;
+    document.getElementById('st-total').textContent = total;
+    document.getElementById('st-new').textContent = reported;
     document.getElementById('st-assigned').textContent = assigned;
     document.getElementById('st-resolved').textContent = resolved;
     document.getElementById('st-critical').textContent = critical;
-    document.getElementById('st-avg').textContent      = avg;
+    document.getElementById('st-avg').textContent = average;
+    return;
+
   }
 
   // ── Render table ──────────────────────────────────────────────────────────
@@ -190,10 +211,10 @@
 
     // Filter
     if (activeFilter !== 'all') {
-      if (['New', 'Assigned', 'Resolved'].includes(activeFilter)) {
+      if (['reported', 'assigned', 'resolved'].includes(activeFilter)) {
         rows = rows.filter(i => i.status === activeFilter);
       } else {
-        rows = rows.filter(i => i.severity === activeFilter);
+        rows = rows.filter(i => i.priority_level === activeFilter);
       }
     }
 
@@ -229,9 +250,10 @@
         tr.className = 'row-enter';
       }
 
-      const color   = priorityColor(inc.priority_score);
+      const priorityScore = Number(inc.priority_score) || 0;
+      const color   = priorityColor(priorityScore);
       const shelter = inc.shelter_id ? (shelterMap[inc.shelter_id] || `Shelter #${inc.shelter_id}`) : '—';
-      const pct     = Math.min(inc.priority_score, 100);
+      const pct     = Math.min(priorityScore * 100, 100);
 
       tr.innerHTML = `
         <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">#${inc.id}</td>
@@ -239,20 +261,18 @@
           <div style="font-weight:500">${escHtml(inc.name)}</div>
           ${inc.phone ? `<div style="font-size:11px;color:var(--muted)">${escHtml(inc.phone)}</div>` : ''}
         </td>
-        <td><span class="badge sev-${inc.severity}">${inc.severity}</span></td>
+        <td><span class="badge sev-${inc.priority_level || 'Low'}">${inc.severity} / 5</span></td>
         <td>
           <div class="p-wrap">
-            <span class="p-score" style="color:${color}">${inc.priority_score.toFixed(0)}</span>
+            <span class="p-score" style="color:${color}">${priorityScore.toFixed(3)}</span>
             <div class="p-bar"><div class="p-fill" style="width:${pct}%;background:${color}"></div></div>
           </div>
         </td>
         <td><div class="desc-cell" title="${escHtml(inc.description || '')}">${escHtml(inc.description || '—')}</div></td>
         <td style="font-size:12px">${escHtml(shelter)}</td>
         <td>
-          <select class="status-select status-${inc.status}" onchange="patchStatus(${inc.id}, this)">
-            <option value="New"      ${inc.status==='New'      ? 'selected':''}>🔵 New</option>
-            <option value="Assigned" ${inc.status==='Assigned' ? 'selected':''}>🟡 Assigned</option>
-            <option value="Resolved" ${inc.status==='Resolved' ? 'selected':''}>✅ Resolved</option>
+          <select class="status-select status-${inc.status}" disabled aria-label="Current incident status">
+            <option selected>${String(inc.status || '').replace(/_/g, ' ')}</option>
           </select>
         </td>
         <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(inc.created_at)}</td>

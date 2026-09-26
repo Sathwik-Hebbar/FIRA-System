@@ -19,7 +19,7 @@ Layer	Choice	Notes
 Frontend	React (Vite)	Component-based: Map view, Report form, Dashboard as separate routed pages
 Map	react-leaflet + OpenStreetMap tiles	No API key required
 Backend	FastAPI (Python)	Async, auto-docs at /docs
-Database	SQLite via SQLAlchemy	File-based, fira.db; swappable for Postgres later with no schema change
+Database	Neon Serverless PostgreSQL via SQLAlchemy	Cloud-hosted Lakebase Postgres with auto-connection pooling
 Risk model	Trained ML classifier (scikit-learn), with a rule-based formula as fallback/baseline	See §5
 SOS text understanding	Google Gemini API (gemini-1.5-flash or current equivalent), with a keyword rule-engine as fallback	See §6
 3. Folder Structure
@@ -29,7 +29,7 @@ fira/
 │   ├── risk_engine.py          # loads ML model, compute_risk(), rule-based fallback, bump_rainfall()
 │   ├── priority_engine.py      # compute_priority() — Gemini call + keyword fallback
 │   ├── models.py               # SQLAlchemy models: Zone, Report, Shelter
-│   ├── database.py             # SQLite engine + session dependency
+│   ├── database.py             # Neon PostgreSQL engine + session dependency
 │   ├── seed_data.py            # seed_if_empty() loader
 │   ├── gemini_client.py        # thin wrapper around the Gemini API call, with try/except fallback
 │   └── requirements.txt

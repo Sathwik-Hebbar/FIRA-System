@@ -1,6 +1,8 @@
 /* auth.js – Frontend authentication utilities for FIRA */
 
-const API = 'http://localhost:8000';
+const API = (typeof window !== 'undefined' && window.location && /^https?:$/.test(window.location.protocol))
+  ? window.location.origin
+  : 'http://localhost:8000';
 
 /* ── JWT helpers ──────────────────────────────────────────────────────── */
 function _b64Decode(str) {
@@ -66,7 +68,11 @@ async function apiFetch(path, opts = {}) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(API + path, { ...opts, headers });
   if (res.status === 401) { logout(); return; }
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const detail = body && typeof body.detail === 'string' ? `: ${body.detail}` : '';
+    throw new Error(`${res.status} ${res.statusText}${detail}`);
+  }
   return res.json();
 }
 
@@ -114,6 +120,29 @@ function _buildNav(role, user) {
   ];
 
   const links = role === 'citizen' ? citizenLinks : commandLinks;
+  const currentPage = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  const displayName = _escapeHtml(user.name || user.sub || 'User');
+  const initial = _escapeHtml((user.name || user.sub || 'U').trim().charAt(0).toUpperCase());
+  const emergencyContact = role === 'citizen'
+    ? '<a class="nav-emergency" href="tel:+918071579681">Emergency: +91 80715 79681</a>'
+    : '';
+
+  nav.innerHTML = `
+    <div class="nav-bar">
+      <a href="${role === 'citizen' ? 'index.html' : 'command.html'}" class="nav-brand" aria-label="FIRA home">
+        <span class="nav-mark">F</span><span>FIRA</span><small>Flood Intelligence</small>
+      </a>
+      <div class="nav-links">
+        ${links.map(l => `<a href="${l.href}" class="nav-link${l.href === currentPage ? ' active' : ''}">${l.label}</a>`).join('')}
+      </div>
+      <div class="nav-user">
+        ${emergencyContact}
+        <span class="nav-avatar" aria-hidden="true">${initial}</span>
+        <span class="nav-username">${displayName}</span>
+        <button class="btn btn-ghost nav-logout" onclick="window.auth.logout()">Logout</button>
+      </div>
+    </div>`;
+  return;
 
   nav.innerHTML = `
     <div class="nav-bar">

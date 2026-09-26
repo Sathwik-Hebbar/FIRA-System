@@ -5,14 +5,14 @@
 The FastAPI backend accepts web reports in `backend/main.py` and voice SOS data in
 `backend/routes_voice.py`. Voice calls pass through Sarvam STT/translation,
 `GeminiExtractor`, citizen matching, and `merge_voice_sos`; reports are then stored
-in SQLite and read by `/incidents` for the Command Center UI.
+in Neon PostgreSQL and read by `/incidents` for the Command Center UI.
 
 ## Problems found and fixed
 
 | Area | Problem | Fix |
 | --- | --- | --- |
 | Voice triage | Extracted fields were converted back into a keyword string for priority, so structured facts could be lost. | `services/incident_processor.py` scores normalized fields directly. |
-| Persistence | Raw payload, normalized facts, risk and reasons were not persisted on the incident. | Added report audit columns and SQLite migration. |
+| Persistence | Raw payload, normalized facts, risk and reasons were not persisted on the incident. | Added report audit columns and database migration. |
 | Two input paths | Web and voice reports used unrelated scoring flows. | Both call `process_incident()`. |
 | Explainability | Only one legacy priority reason was retained. | Canonical `priority.reason` is persisted as `priority_reasons`. |
 | Gemini resilience | A dummy/local key could trigger outbound attempts. | Dummy keys are treated as unconfigured; deterministic fallback remains active. |
@@ -33,7 +33,7 @@ whose backend values include `risk_score`, `risk_level`, `priority_reasons`, and
 
 The `reports` table gains `raw_input`, `normalized_data`, `risk_score`,
 `risk_level`, `priority_reasons`, `ai_analysis`, and `updated_at`; `voice_sessions`
-gains `raw_payload`. `ensure_schema_migrations()` upgrades existing SQLite files.
+gains `raw_payload`. `ensure_schema_migrations()` validates database schemas.
 
 ## Environment
 

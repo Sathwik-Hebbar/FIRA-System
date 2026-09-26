@@ -5,149 +5,152 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FIRA – Emergency Operations</title>
   <meta name="description" content="FIRA Command Center – Emergency Operations Dashboard." />
-  <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/style.css?v=2.2" />
   <style>
-    main { padding: var(--space-lg); }
+    main { padding: var(--space-xl) var(--space-lg); max-width: 1440px; margin: 0 auto; }
 
     /* ── KPI Cards ── */
     .kpi-row {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 14px; margin-bottom: 24px;
+      gap: 16px; margin-bottom: 28px;
     }
     @media (max-width: 900px) { .kpi-row { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 600px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } }
 
     .kpi-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 18px 20px;
-      transition: border-color 0.2s;
+      background: #ffffff; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 22px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .kpi-card:hover { border-color: var(--border-mid); }
-    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; }
-    .kpi-value { font-size: 32px; font-weight: 800; line-height: 1; }
-    .kpi-sub   { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .kpi-card:hover { border-color: var(--accent-border); box-shadow: var(--shadow); transform: translateY(-2px); }
+    .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 8px; font-weight: 700; }
+    .kpi-value { font-size: 32px; font-weight: 800; line-height: 1.1; font-family: 'JetBrains Mono', monospace; color: var(--text); }
+    .kpi-sub   { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
 
     /* ── Incident Queue ── */
     .section-title {
-      font-size: 16px; font-weight: 700; margin-bottom: 14px;
-      display: flex; align-items: center; gap: 8px;
+      font-size: 18px; font-weight: 800; margin-bottom: 18px;
+      display: flex; align-items: center; gap: 10px; color: var(--accent-deep);
     }
     .section-title .count-badge {
-      background: rgba(59,130,246,0.2); color: #60a5fa;
-      font-size: 11px; padding: 2px 8px; border-radius: 100px;
+      background: var(--accent-subtle); color: var(--accent);
+      font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 100px;
+      border: 1px solid var(--accent-border);
     }
 
     /* ── Incident list ── */
-    .incident-list { display: flex; flex-direction: column; gap: 10px; }
+    .incident-list { display: flex; flex-direction: column; gap: 12px; }
 
     .inc-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 16px;
-      cursor: pointer; transition: border-color 0.2s, transform 0.15s;
+      background: #ffffff; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 22px;
+      cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       display: grid; grid-template-columns: auto 1fr auto;
-      gap: 16px; align-items: center;
+      gap: 18px; align-items: center; box-shadow: var(--shadow-sm);
     }
-    .inc-card:hover { border-color: var(--border-mid); transform: translateX(2px); }
-    .inc-card.selected { border-color: #3b82f6; background: rgba(59,130,246,0.06); }
+    .inc-card:hover { border-color: var(--accent-border); transform: translateX(3px); box-shadow: var(--shadow); }
+    .inc-card.selected { border-color: var(--accent); background: var(--accent-subtle); box-shadow: 0 0 0 2px var(--accent-glow); }
 
     .inc-rank {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 20px; font-weight: 800; min-width: 36px; text-align: center;
+      font-size: 20px; font-weight: 800; min-width: 38px; text-align: center;
     }
-    .inc-meta { display: flex; flex-direction: column; gap: 4px; }
-    .inc-top  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .inc-id   { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); }
-    .inc-name { font-weight: 600; font-size: 14px; }
-    .inc-sub  { font-size: 11px; color: var(--text-muted); }
+    .inc-meta { display: flex; flex-direction: column; gap: 5px; }
+    .inc-top  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .inc-id   { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--accent); }
+    .inc-name { font-weight: 700; font-size: 15px; color: var(--text); }
+    .inc-sub  { font-size: 12px; color: var(--text-dim); }
 
     .status-pill {
-      padding: 3px 10px; border-radius: 100px; font-size: 10px; font-weight: 700;
+      padding: 4px 12px; border-radius: 100px; font-size: 11px; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.5px;
     }
-    .status-reported   { background: rgba(148,163,184,0.15); color: #94a3b8; }
-    .status-prioritized { background: rgba(59,130,246,0.15); color: #60a5fa; }
-    .status-assigned   { background: rgba(234,179,8,0.15); color: #eab308; }
-    .status-in_progress { background: rgba(249,115,22,0.15); color: #f97316; }
-    .status-resolved   { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .status-reported    { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    .status-prioritized { background: var(--accent-subtle); color: var(--accent); border: 1px solid var(--accent-border); }
+    .status-assigned    { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .status-in_progress { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
+    .status-resolved    { background: var(--green-subtle); color: var(--green); border: 1px solid var(--green-border); }
 
     .priority-badge {
-      padding: 3px 10px; border-radius: 100px; font-size: 10px; font-weight: 700;
+      padding: 4px 12px; border-radius: 100px; font-size: 11px; font-weight: 700;
     }
-    .prio-Critical { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .prio-High     { background: rgba(249,115,22,0.15); color: #f97316; }
-    .prio-Moderate { background: rgba(234,179,8,0.15); color: #eab308; }
-    .prio-Low      { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .prio-Critical { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .prio-High     { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
+    .prio-Moderate { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .prio-Low      { background: var(--green-subtle); color: var(--green); border: 1px solid var(--green-border); }
 
     /* ── Detail panel ── */
     .detail-panel {
       display: none;
-      background: var(--surface); border: 1px solid var(--border-mid);
-      border-radius: var(--radius); padding: var(--space-lg);
-      margin-top: 20px; animation: fadeIn 0.3s ease;
+      background: #ffffff; border: 1px solid var(--border-mid);
+      border-radius: var(--radius); padding: 26px;
+      margin-top: 24px; animation: fadeIn 0.3s ease;
+      box-shadow: var(--shadow-lg);
     }
     .detail-panel.show { display: block; }
-    .detail-title { font-size: 18px; font-weight: 800; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+    .detail-title { font-size: 20px; font-weight: 800; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; color: var(--text); }
 
-    .detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
-    .dg-item .dg-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 4px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; background: var(--bg-subtle); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    .dg-item .dg-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin-bottom: 4px; font-weight: 700; }
     .dg-item .dg-value { font-size: 14px; font-weight: 600; color: var(--text); }
 
     /* Action row */
     .action-row {
-      display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
-      padding-top: 18px; border-top: 1px solid var(--border);
+      display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+      padding-top: 20px; border-top: 1px solid var(--border);
     }
-    .action-row select { flex: 1; min-width: 160px; }
+    .action-row select { flex: 1; min-width: 180px; }
     .action-row input  { flex: 2; }
 
-    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius); }
     .es-icon { font-size: 48px; margin-bottom: 12px; }
 
-    .score-bar { height: 6px; border-radius: 3px; background: var(--surface2); margin-top: 6px; overflow: hidden; }
-    .score-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+    .score-bar { height: 8px; border-radius: 100px; background: var(--border); margin-top: 8px; overflow: hidden; }
+    .score-fill { height: 100%; border-radius: 100px; transition: width 0.4s ease; }
 
     /* ── Voice SOS Extensions ── */
     .source-badge {
-      padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 700;
+      padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 700;
       display: inline-flex; align-items: center; gap: 4px;
     }
-    .source-voice { background: rgba(168,85,247,0.18); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
-    .source-web   { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .source-voice { background: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe; }
+    .source-web   { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
-    .filter-btn-group { display: flex; gap: 6px; align-items: center; }
+    .filter-btn-group { display: flex; gap: 8px; align-items: center; }
     .filter-btn {
-      background: var(--surface); border: 1px solid var(--border);
-      color: var(--text-muted); font-size: 11px; font-weight: 600;
-      padding: 5px 12px; border-radius: 6px; cursor: pointer; transition: all 0.15s;
+      background: #ffffff; border: 1px solid var(--border-mid);
+      color: var(--text-muted); font-size: 12px; font-weight: 600;
+      padding: 6px 14px; border-radius: 100px; cursor: pointer; transition: all 0.15s;
     }
-    .filter-btn:hover { border-color: var(--border-mid); color: var(--text); }
+    .filter-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-subtle); }
     .filter-btn.active {
-      background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #60a5fa;
+      background: var(--accent); border-color: var(--accent); color: #ffffff; box-shadow: 0 2px 8px rgba(29, 78, 216, 0.25);
     }
 
     .voice-intel-box {
-      background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.25);
-      border-radius: var(--radius); padding: 16px; margin-bottom: 20px;
+      background: var(--accent-subtle); border: 1px solid var(--accent-border);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 22px;
     }
     .voice-tag-grid {
       display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;
     }
     .voice-tag {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 4px; padding: 4px 8px; font-size: 11px;
+      background: #ffffff; border: 1px solid var(--border);
+      border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: var(--text);
     }
     .voice-tag.highlight {
-      border-color: #ef4444; color: #f87171; background: rgba(239,68,68,0.08); font-weight: 700;
+      border-color: #fecaca; color: #b91c1c; background: #fee2e2; font-weight: 700;
     }
     .transcript-box {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 6px; padding: 10px 12px; font-size: 12px; margin-top: 6px;
+      background: #ffffff; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13px; margin-top: 6px;
       line-height: 1.5; color: var(--text);
     }
   </style>
 </head>
-<body>
+<body class="command-page">
 
 <div id="nav"></div>
 
@@ -166,31 +169,39 @@
 
 <main>
 
+  <section class="page-intro" style="margin-bottom:26px">
+    <div>
+      <div class="page-kicker">Response operations</div>
+      <h1>Incident command</h1>
+    </div>
+    <p>Review, prioritise, and dispatch emergency response activity from one operational queue.</p>
+  </section>
+
   <!-- KPI Cards -->
   <div class="kpi-row">
     <div class="kpi-card">
       <div class="kpi-label">Active Incidents</div>
-      <div class="kpi-value" id="kpi-active" style="color:#60a5fa">—</div>
+      <div class="kpi-value" id="kpi-active" style="color:var(--accent)">—</div>
       <div class="kpi-sub">not yet resolved</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Critical</div>
-      <div class="kpi-value" id="kpi-critical" style="color:#ef4444">—</div>
+      <div class="kpi-label">Critical Threat</div>
+      <div class="kpi-value" id="kpi-critical" style="color:var(--severe)">—</div>
       <div class="kpi-sub">score ≥ 0.75</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">High Priority</div>
-      <div class="kpi-value" id="kpi-high" style="color:#f97316">—</div>
+      <div class="kpi-value" id="kpi-high" style="color:var(--high)">—</div>
       <div class="kpi-sub">score ≥ 0.50</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">People Affected</div>
-      <div class="kpi-value" id="kpi-people" style="color:#eab308">—</div>
+      <div class="kpi-value" id="kpi-people" style="color:var(--moderate)">—</div>
       <div class="kpi-sub">estimated total</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Resolved Today</div>
-      <div class="kpi-value" id="kpi-resolved" style="color:#22c55e">—</div>
+      <div class="kpi-value" id="kpi-resolved" style="color:var(--green)">—</div>
       <div class="kpi-sub">since midnight</div>
     </div>
   </div>
@@ -209,10 +220,7 @@
       <button class="filter-btn" id="filter-web" onclick="setFilter('WEB')">💻 Web SOS</button>
     </div>
 
-    <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px;background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.3)" onclick="openVoiceModal()">
-      🎙️ Test Voice Call
-    </button>
-    <button class="btn btn-ghost" style="font-size:12px" onclick="load()">↻ Refresh</button>
+    <button class="btn btn-ghost" style="font-size:12px" onclick="load()">↻ Refresh Queue</button>
   </div>
 
   <div id="incident-list" class="incident-list">
@@ -308,28 +316,28 @@
 
 </main>
 
-<!-- Voice Call Simulator Modal -->
-<div id="voice-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;padding:20px">
-  <div style="background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--radius);max-width:580px;width:100%;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,0.6)">
+<!-- Emergency Voice Call Dispatch Intake Modal -->
+<div id="voice-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#ffffff;border:1px solid var(--border);border-radius:var(--radius);max-width:580px;width:100%;padding:26px;box-shadow:var(--shadow-lg)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:16px;font-weight:800;color:#c084fc;display:flex;align-items:center;gap:8px">
-        🎙️ Voice SOS Call Simulator
+      <div style="font-size:17px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px">
+        🎙️ Emergency Voice Dispatch Intake
       </div>
       <button class="btn btn-ghost" style="padding:4px 8px;font-size:14px" onclick="closeVoiceModal()">✕</button>
     </div>
 
-    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
-      Simulates an incoming telephone emergency call to the FIRA helpline. Speech is processed through Sarvam Saaras STT translation, Gemini 1.5 fact extraction, phone-based citizen profile lookup, and the existing FIRA Priority Engine.
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
+      Log an incoming telephone emergency call directly into the response triage queue. Audio transcripts are automatically translated, extracted, risk-scored, and prioritized.
     </p>
 
-    <div class="form-group" style="margin-bottom:10px">
-      <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Caller Phone Number</label>
-      <input id="vsim-phone" type="text" value="+91 98765 43210" style="width:100%" placeholder="+91 98765 43210" />
-      <span style="font-size:10px;color:var(--text-muted)">Matched against registered citizens in DB (e.g. Ramesh +91 98765 43210).</span>
+    <div class="form-group" style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Caller Phone Number</label>
+      <input id="vsim-phone" type="text" value="+91 98765 43210" style="width:100%" placeholder="+91 98000 00000" />
+      <span style="font-size:11px;color:var(--text-dim)">Verified against registered citizens in database.</span>
     </div>
 
-    <div class="form-group" style="margin-bottom:10px">
-      <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Language</label>
+    <div class="form-group" style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Language</label>
       <select id="vsim-lang" style="width:100%">
         <option value="kn-IN" selected>kn-IN (Kannada - ಕನ್ನಡ)</option>
         <option value="en-IN">en-IN (English)</option>
@@ -338,25 +346,25 @@
     </div>
 
     <div class="form-group" style="margin-bottom:14px">
-      <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Caller Speech Statement</label>
+      <label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block">Caller Speech Statement</label>
       <textarea id="vsim-text" rows="3" style="width:100%;font-size:13px;line-height:1.4">ನಮ್ಮ ಮನೆಗೆ ನೀರು ತುಂಬಿಕೊಂಡಿದೆ. ನಾವು ನಾಲ್ಕು ಜನ ಇದ್ದೇವೆ. ಇಬ್ಬರು ಮಕ್ಕಳು ಇದ್ದಾರೆ. ನನ್ನ ತಂದೆಗೆ ಕಾಲಿಗೆ ಗಾಯವಾಗಿದೆ. ನಾವು ಮನೆಯಿಂದ ಹೊರಗೆ ಬರಲು ಆಗುತ್ತಿಲ್ಲ.</textarea>
-      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-        <button type="button" class="btn btn-ghost" style="font-size:10px;padding:3px 8px;border:1px solid var(--border)" onclick="setSample('kn_critical')">Sample: Kannada (4 Trapped + Injured Father)</button>
-        <button type="button" class="btn btn-ghost" style="font-size:10px;padding:3px 8px;border:1px solid var(--border)" onclick="setSample('en_flood')">Sample: English (5 Stranded + Children)</button>
-        <button type="button" class="btn btn-ghost" style="font-size:10px;padding:3px 8px;border:1px solid var(--border)" onclick="setSample('unregistered')">Sample: Unknown Caller (No DB match)</button>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;border-radius:100px" onclick="setSample('kn_critical')">Template: Severe Inundation (4 Trapped)</button>
+        <button type="button" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;border-radius:100px" onclick="setSample('en_flood')">Template: Urban Flood (5 Stranded)</button>
+        <button type="button" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;border-radius:100px" onclick="setSample('unregistered')">Template: Emergency Hotline SOS</button>
       </div>
     </div>
 
-    <div id="vsim-response" style="display:none;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:6px;padding:12px;margin-bottom:14px;font-size:12px">
-      <div style="font-weight:700;color:#c084fc;margin-bottom:4px">🔊 AI Voice Agent Audio Response:</div>
+    <div id="vsim-response" style="display:none;background:var(--accent-subtle);border:1px solid var(--accent-border);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px">
+      <div style="font-weight:700;color:var(--accent);margin-bottom:4px">🔊 Emergency Response Audio Feedback:</div>
       <div id="vsim-audio-msg" style="font-style:italic;color:var(--text);margin-bottom:6px"></div>
       <div style="font-size:11px;color:var(--text-muted)" id="vsim-meta"></div>
     </div>
 
     <div style="display:flex;justify-content:flex-end;gap:10px">
-      <button class="btn btn-ghost" onclick="closeVoiceModal()">Close</button>
-      <button class="btn btn-primary" id="vsim-submit-btn" style="background:#9333ea;border-color:#a855f7" onclick="submitVoiceSimulation()">
-        📞 Send Emergency Call
+      <button class="btn btn-ghost" onclick="closeVoiceModal()">Cancel</button>
+      <button class="btn btn-primary" id="vsim-submit-btn" onclick="submitVoiceIntake()">
+        📞 Ingest Emergency Call
       </button>
     </div>
   </div>
@@ -364,7 +372,7 @@
 
 <div id="toast"></div>
 
-<script src="auth.js"></script>
+<script src="auth.js?v=2.2"></script>
 <script>
   // Enforce command_center login
   const currentUser = window.auth.enforceAuth('command_center');
@@ -639,7 +647,7 @@
     }
   }
 
-  async function submitVoiceSimulation() {
+  async function submitVoiceIntake() {
     const btn = document.getElementById('vsim-submit-btn');
     const phone = document.getElementById('vsim-phone').value.trim();
     const lang = document.getElementById('vsim-lang').value;
@@ -669,10 +677,10 @@
       await load();
       selectIncident(resp.sos_id);
     } catch (err) {
-      toast(window.auth.errorMessage(err, 'Failed to process voice simulation'), 'error');
+      toast(window.auth.errorMessage(err, 'Failed to process emergency call'), 'error');
     } finally {
       btn.disabled = false;
-      btn.textContent = '📞 Send Emergency Call';
+      btn.textContent = '📞 Ingest Emergency Call';
     }
   }
 

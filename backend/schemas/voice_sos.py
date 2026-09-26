@@ -142,6 +142,7 @@ class VoiceProcessRequest(BaseModel):
     session_id: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    conversation_history: Optional[List[Dict[str, Any]]] = None
 
 
 class VoiceProcessResponse(BaseModel):

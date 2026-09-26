@@ -1,5 +1,5 @@
 '''backend/data_collector.py
-Purpose: Pull live weather and flood data for every Zone and store it in the SQLite DB.
+Purpose: Pull live weather and flood data for every Zone and store it in the Neon PostgreSQL DB.
 
 The collector uses the free Open‑Meteo APIs (weather + flood). No API key is required.
 It is intended to be run at startup or on a short timer (e.g. every 5 min).

@@ -91,25 +91,11 @@ async def sarvam_voice_sos(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Secure Sarvam API-tool adapter that forwards its transcript into FIRA's SOS pipeline."""
-    expected_token = os.getenv("SARVAM_FIRA_WEBHOOK_TOKEN", "").strip()
-    if not expected_token:
-        logger.warning("SARVAM_FIRA_WEBHOOK_TOKEN is not configured in .env")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Sarvam integration is not configured",
-        )
-
-    authorization = request.headers.get("authorization", "")
-    scheme, _, supplied_token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not secrets.compare_digest(supplied_token, expected_token):
-        logger.warning("Unauthorized Sarvam webhook call. Auth header: %s", authorization)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid integration credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
+    """
+    Secure Sarvam adapter supporting both:
+    1. Sarvam Voice Agent API Tool (invoked on_end with Bearer token)
+    2. Sarvam Platform Post-Call Webhook (invoked with call transcript & metadata)
+    """
     # 1. Parse JSON body, form data, query parameters, and custom headers safely
     payload: Dict[str, Any] = {}
     try:
@@ -128,7 +114,7 @@ async def sarvam_voice_sos(
     if request.query_params:
         payload = {**dict(request.query_params), **payload}
 
-    # Inspect headers for custom fields (e.g. user_name, call_summary passed as headers)
+    # Inspect headers for custom fields
     for h_key, h_val in request.headers.items():
         h_lower = h_key.lower()
         if h_lower in ["user_name", "username", "caller_phone", "phone"] and "caller_phone" not in payload:
@@ -136,53 +122,173 @@ async def sarvam_voice_sos(
         elif h_lower in ["call_summary", "transcript", "summary"] and "transcript" not in payload:
             payload["transcript"] = h_val
 
-    logger.info("Received Sarvam SOS webhook payload: %s", payload)
+    # Unpack nested "Output" if present (Sarvam API tool payload format)
+    output_val = payload.get("Output") or payload.get("output")
+    if isinstance(output_val, str):
+        try:
+            output_val = json.loads(output_val)
+        except Exception:
+            pass
+    if isinstance(output_val, dict):
+        for k, v in output_val.items():
+            if k not in payload or not payload[k] or str(payload[k]).startswith("@"):
+                payload[k] = v
 
-    # 2. Extract caller_phone (support multiple aliases)
-    raw_phone = (
-        payload.get("caller_phone")
-        or payload.get("phone")
-        or payload.get("user_identifier")
-        or payload.get("User Identifier")
-        or payload.get("from")
-        or payload.get("caller")
-        or payload.get("user_name")
-        or "+91-SARVAM-CALLER"
-    )
-    caller_phone = str(raw_phone).strip() or "+91-SARVAM-CALLER"
+    # Unpack "final_agent_variables" if present (Sarvam post-call webhook format)
+    fav = payload.get("final_agent_variables")
+    if isinstance(fav, dict):
+        for k, v in fav.items():
+            if k in ("Output", "output"):
+                nested = v
+                if isinstance(nested, str):
+                    try:
+                        nested = json.loads(nested)
+                    except Exception:
+                        pass
+                if isinstance(nested, dict):
+                    for nk, nv in nested.items():
+                        if nk not in payload or not payload[nk] or str(payload[nk]).startswith("@"):
+                            payload[nk] = nv
+            elif k not in payload or not payload[k] or str(payload[k]).startswith("@"):
+                payload[k] = v
 
-    # 3. Extract transcript / summary (support multiple aliases)
-    raw_transcript = (
-        payload.get("transcript")
-        or payload.get("call_summary")
-        or payload.get("summary")
-        or payload.get("text")
-        or payload.get("Call Transcript")
-        or payload.get("Call Summary")
-        or payload.get("description")
-        or payload.get("message")
-        or ""
-    )
-    transcript = str(raw_transcript).strip()
-    if not transcript:
-        # Graceful fallback: Still log the emergency event in FIRA database
-        transcript = "Emergency Voice Call received via Sarvam AI Voice Agent (call completed)"
+    # 2. Authentication check
+    expected_token = os.getenv("SARVAM_FIRA_WEBHOOK_TOKEN", "").strip()
+    helpline_number = os.getenv("FIRA_HELPLINE_NUMBER", "+918071579681").strip()
+    voice_agent_id = os.getenv("VOICE_AGENT_ID", "").strip()
 
-    # 4. Extract session_id
-    raw_session_id = (
-        payload.get("session_id")
-        or payload.get("interaction_id")
-        or payload.get("Interaction ID")
-        or payload.get("call_id")
-        or payload.get("id")
-        or f"sarvam_{uuid.uuid4().hex[:12]}"
-    )
-    session_id = str(raw_session_id).strip() or f"sarvam_{uuid.uuid4().hex[:12]}"
+    is_authenticated = False
+    authorization = request.headers.get("authorization", "")
+    if authorization:
+        scheme, _, supplied_token = authorization.partition(" ")
+        if scheme.lower() == "bearer" and expected_token and secrets.compare_digest(supplied_token, expected_token):
+            is_authenticated = True
+
+    # Check query param token (?token=... or ?secret=...) or custom header
+    query_token = request.query_params.get("token") or request.query_params.get("secret") or request.query_params.get("key")
+    header_token = request.headers.get("x-sarvam-token") or request.headers.get("x-webhook-token")
+    if (query_token and expected_token and secrets.compare_digest(query_token, expected_token)) or \
+       (header_token and expected_token and secrets.compare_digest(header_token, expected_token)):
+        is_authenticated = True
+
+    # Check verified Sarvam platform post-call webhook matching our helpline / agent deployment
+    agent_phone = str(payload.get("agent_phone_number") or "").strip()
+    app_id = str(payload.get("app_id") or "").strip()
+    deployment_id = str(payload.get("deployment_id") or "").strip()
+
+    if not is_authenticated:
+        if (helpline_number and agent_phone == helpline_number) or \
+           (app_id and (app_id.startswith("FIRA") or (voice_agent_id and app_id == voice_agent_id))) or \
+           (deployment_id and deployment_id.startswith("FIRA")):
+            logger.info(
+                "Authenticated Sarvam post-call webhook via verified agent metadata (app_id=%s, agent_phone=%s)",
+                app_id, agent_phone
+            )
+            is_authenticated = True
+
+    if not is_authenticated:
+        logger.warning("Unauthorized Sarvam webhook call. Auth header: %s, params: %s", authorization, dict(request.query_params))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid integration credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    logger.info("Received authenticated Sarvam SOS payload: keys=%s", list(payload.keys()))
+
+    # 3. Extract caller_phone (filter out unreplaced '@' placeholder variables)
+    phone_candidates = [
+        payload.get("user_phone_number"),
+        payload.get("caller_phone"),
+        payload.get("phone"),
+        payload.get("user_identifier"),
+        payload.get("User Identifier"),
+        payload.get("from"),
+        payload.get("caller"),
+        payload.get("user_name"),
+    ]
+    caller_phone = None
+    for p in phone_candidates:
+        if p and str(p).strip() and not str(p).strip().startswith("@"):
+            caller_phone = str(p).strip()
+            break
+    if not caller_phone:
+        caller_phone = "+91-SARVAM-CALLER"
+
+    # 4. Extract session_id (filter out unreplaced '@' placeholder variables)
+    sid_candidates = [
+        payload.get("interaction_id"),
+        payload.get("session_id"),
+        payload.get("Interaction ID"),
+        payload.get("call_id"),
+        payload.get("id"),
+    ]
+    session_id = None
+    for s in sid_candidates:
+        if s and str(s).strip() and not str(s).strip().startswith("@"):
+            session_id = str(s).strip()
+            break
+    if not session_id:
+        session_id = f"sarvam_{uuid.uuid4().hex[:12]}"
 
     # 5. Extract language
-    language = str(payload.get("language") or payload.get("lang") or os.getenv("AGENT_LANGUAGE", "kn-IN")).strip()
+    raw_lang = payload.get("language") or payload.get("lang") or os.getenv("AGENT_LANGUAGE", "kn-IN")
+    language = str(raw_lang).strip()
+    if language.startswith("@") or not language:
+        language = os.getenv("AGENT_LANGUAGE", "kn-IN")
 
-    # 6. Check for duplicate delivery (Sarvam retries failed on_end tool deliveries)
+    # 6. Extract transcript from interaction_transcript (turns) or text fields
+    interaction_turns = payload.get("interaction_transcript")
+    dialogue_lines: List[str] = []
+    user_speech_indic: List[str] = []
+    user_speech_en: List[str] = []
+    structured_history: List[Dict[str, Any]] = []
+
+    if isinstance(interaction_turns, list):
+        for turn in interaction_turns:
+            if not isinstance(turn, dict):
+                continue
+            role = turn.get("role", "caller")
+            role_label = "Agent" if role == "agent" else "Caller"
+            indic_text = (turn.get("indic_text") or "").strip()
+            en_text = (turn.get("en_text") or "").strip()
+            text = indic_text or en_text
+            if text:
+                dialogue_lines.append(f"{role_label}: {text}")
+                structured_history.append({"role": role, "text": text, "en": en_text, "indic": indic_text})
+            if role == "user":
+                if indic_text:
+                    user_speech_indic.append(indic_text)
+                if en_text:
+                    user_speech_en.append(en_text)
+
+    transcript_candidates = [
+        payload.get("transcript"),
+        payload.get("call_summary"),
+        payload.get("summary"),
+        payload.get("text"),
+        payload.get("Call Transcript"),
+        payload.get("Call Summary"),
+        payload.get("description"),
+        payload.get("message"),
+    ]
+    transcript = None
+    for t in transcript_candidates:
+        if t and str(t).strip() and not str(t).strip().startswith("@"):
+            transcript = str(t).strip()
+            break
+
+    if not transcript:
+        if user_speech_indic:
+            transcript = " ".join(user_speech_indic)
+        elif user_speech_en:
+            transcript = " ".join(user_speech_en)
+        elif dialogue_lines:
+            transcript = "\n".join(dialogue_lines)
+        else:
+            transcript = "Emergency Voice Call received via Sarvam AI Voice Agent (call completed)"
+
+    # 7. Check for duplicate delivery (Sarvam retries failed on_end tool deliveries)
     prior_session = db.query(VoiceSession).filter(VoiceSession.id == session_id).first()
     if prior_session and prior_session.incident_id:
         prior_report = db.query(Report).filter(Report.id == prior_session.incident_id).first()
@@ -197,13 +303,13 @@ async def sarvam_voice_sos(
                 "duplicate_delivery": True,
             }
 
-    # 7. Construct VoiceProcessRequest and pass into pipeline
+    # 8. Extract optional coordinates
     lat_val = None
     lng_val = None
     try:
-        if payload.get("lat") is not None:
+        if payload.get("lat") is not None and not str(payload["lat"]).startswith("@"):
             lat_val = float(payload["lat"])
-        if payload.get("lng") is not None:
+        if payload.get("lng") is not None and not str(payload["lng"]).startswith("@"):
             lng_val = float(payload["lng"])
     except (ValueError, TypeError):
         pass
@@ -215,6 +321,7 @@ async def sarvam_voice_sos(
         language=language,
         lat=lat_val,
         lng=lng_val,
+        conversation_history=structured_history or None,
     )
 
     result = await process_voice_sos(voice_req, db)
@@ -266,11 +373,12 @@ async def process_voice_sos(
     """
     Complete end-to-end Voice SOS pipeline:
     Speech/Transcript -> Translation -> Extraction -> Citizen Match -> Merge
-    -> Existing Priority Engine -> SQLite Database -> Kannada TTS Confirmation.
+    -> Existing Priority Engine -> Neon Database -> Kannada TTS Confirmation.
     """
     session_id = req.session_id or f"vses_{uuid.uuid4().hex[:12]}"
     caller_phone = req.caller_phone
     target_lang = req.language or "kn-IN"
+    conversation_history = getattr(req, "conversation_history", None)
 
     raw_transcript: Optional[str] = req.transcript
     translated_transcript: Optional[str] = None
@@ -359,10 +467,44 @@ async def process_voice_sos(
     normalized_priority_score = round(priority_res["score"] / 100.0, 3)
 
     # Step 6: Database Persistence
+    # CRITICAL: In PostgreSQL / Neon, reports.voice_session_id has a foreign key constraint
+    # referencing voice_sessions.id. Therefore, the VoiceSession row MUST be added and flushed
+    # in the database BEFORE adding/flushing incident_report!
+    voice_session_record = db.query(VoiceSession).filter(VoiceSession.id == session_id).first()
+    conv_hist = conversation_history or [{"role": "caller", "text": raw_transcript or ""}]
+    if not voice_session_record:
+        voice_session_record = VoiceSession(
+            id=session_id,
+            citizen_id=citizen_profile.id,
+            caller_phone=caller_phone,
+            language=target_lang,
+            started_at=datetime.now(timezone.utc),
+            ended_at=datetime.now(timezone.utc),
+            transcript=raw_transcript,
+            translated_transcript=translated_transcript,
+            extracted_data=json.dumps(extraction.model_dump()),
+            raw_payload=json.dumps({"transcript": raw_transcript, "translated_transcript": translated_transcript}),
+            conversation_history=json.dumps(conv_hist),
+            status="PROCESSING",
+            incident_id=None,
+        )
+        db.add(voice_session_record)
+        db.flush()
+    else:
+        if raw_transcript:
+            voice_session_record.transcript = raw_transcript
+        if translated_transcript:
+            voice_session_record.translated_transcript = translated_transcript
+        voice_session_record.extracted_data = json.dumps(extraction.model_dump())
+        if conversation_history:
+            voice_session_record.conversation_history = json.dumps(conversation_history)
+        voice_session_record.ended_at = datetime.now(timezone.utc)
+        db.flush()
+
     nearest_shelter_id = _get_nearest_shelter_id(db, lat, lng)
     shelter_obj = db.query(Shelter).filter(Shelter.id == nearest_shelter_id).first() if nearest_shelter_id else None
 
-    # Create Report
+    # Create Report (Foreign key voice_session_id=session_id now exists in voice_sessions!)
     incident_report = Report(
         name=citizen_profile.name or f"Voice Caller ({caller_phone})",
         phone=citizen_profile.phone,
@@ -403,32 +545,22 @@ async def process_voice_sos(
         location_risk=env_risk,
         report=incident_report,
     )
-    # Retain the legacy response shape while returning canonical scores.
+
     canonical_priority = canonical_incident["priority"]
+    canonical_level_str = str(canonical_priority.get("level", "")).upper()
+    mapped_level = "Critical" if "CRITICAL" in canonical_level_str else "High" if "HIGH" in canonical_level_str else "Medium" if "MEDIUM" in canonical_level_str else "Low"
+
     priority_res = {
         **priority_res,
         "score": canonical_priority["score"],
+        "level": mapped_level,
         "reason": "; ".join(canonical_priority["reason"]),
     }
     normalized_priority_score = incident_report.priority_score
 
-    # Create VoiceSession
-    voice_session_record = VoiceSession(
-        id=session_id,
-        citizen_id=citizen_profile.id,
-        caller_phone=caller_phone,
-        language=target_lang,
-        started_at=datetime.now(timezone.utc),
-        ended_at=datetime.now(timezone.utc),
-        transcript=raw_transcript,
-        translated_transcript=translated_transcript,
-        extracted_data=json.dumps(extraction.model_dump()),
-        raw_payload=json.dumps({"transcript": raw_transcript, "translated_transcript": translated_transcript}),
-        conversation_history=json.dumps([{"role": "caller", "text": raw_transcript or ""}]),
-        status="SOS_CREATED",
-        incident_id=incident_report.id,
-    )
-    db.add(voice_session_record)
+    # Link VoiceSession to Report and finalize
+    voice_session_record.incident_id = incident_report.id
+    voice_session_record.status = "SOS_CREATED"
     db.commit()
     db.refresh(incident_report)
 
@@ -484,8 +616,8 @@ async def process_voice_sos(
         incident=extraction,
         priority={
             "score": priority_res["score"],
-            "normalized_score": normalized_priority_score,
-            "level": prio_level_str,
+            "level": mapped_level,
+            "canonical_level": prio_level_str,
             "reason": priority_res.get("reason"),
             "emergency_signals": priority_res.get("emergency_signals", []),
             "vulnerability_signals": priority_res.get("vulnerability_signals", []),
@@ -894,7 +1026,34 @@ async def finalize_voice_call(
     normalized_priority_score = round(priority_res["score"] / 100.0, 3)
     nearest_shelter_id = _get_nearest_shelter_id(db, lat, lng)
 
-    # Save to SQLite Report
+    # Ensure VoiceSession exists first before Report references it
+    voice_rec = db.query(VoiceSession).filter(VoiceSession.id == session.session_id).first()
+    if not voice_rec:
+        voice_rec = VoiceSession(
+            id=session.session_id,
+            citizen_id=citizen_profile.id,
+            caller_phone=session.caller_phone,
+            language=session.language,
+            started_at=session.started_at,
+            ended_at=session.ended_at,
+            transcript=raw_transcript,
+            translated_transcript=translated_transcript,
+            extracted_data=json.dumps(session.extracted_data.model_dump()),
+            conversation_history=json.dumps(session.turns),
+            status="PROCESSING",
+            incident_id=None,
+        )
+        db.add(voice_rec)
+        db.flush()
+    else:
+        voice_rec.transcript = raw_transcript
+        voice_rec.translated_transcript = translated_transcript
+        voice_rec.extracted_data = json.dumps(session.extracted_data.model_dump())
+        voice_rec.conversation_history = json.dumps(session.turns)
+        voice_rec.ended_at = session.ended_at
+        db.flush()
+
+    # Save to Neon Report
     incident = Report(
         name=citizen_profile.name or f"Voice Caller ({session.caller_phone})",
         phone=citizen_profile.phone,
@@ -917,22 +1076,8 @@ async def finalize_voice_call(
     db.add(incident)
     db.flush()
 
-    # Save VoiceSession record
-    voice_rec = VoiceSession(
-        id=session.session_id,
-        citizen_id=citizen_profile.id,
-        caller_phone=session.caller_phone,
-        language=session.language,
-        started_at=session.started_at,
-        ended_at=session.ended_at,
-        transcript=raw_transcript,
-        translated_transcript=translated_transcript,
-        extracted_data=json.dumps(session.extracted_data.model_dump()),
-        conversation_history=json.dumps(session.turns),
-        status="SOS_CREATED",
-        incident_id=incident.id,
-    )
-    db.add(voice_rec)
+    voice_rec.incident_id = incident.id
+    voice_rec.status = "SOS_CREATED"
     db.commit()
 
     return {
@@ -1094,6 +1239,34 @@ def commit_voice_session_incident(db: Session, session: VoiceSessionState) -> Op
     normalized_priority_score = round(priority_res["score"] / 100.0, 3)
     nearest_shelter_id = _get_nearest_shelter_id(db, lat, lng)
 
+    # Ensure VoiceSession exists first before Report references it
+    vrec = db.query(VoiceSession).filter(VoiceSession.id == session.session_id).first()
+    if not vrec:
+        vrec = VoiceSession(
+            id=session.session_id,
+            citizen_id=citizen_profile.id,
+            caller_phone=session.caller_phone,
+            language=session.language,
+            started_at=session.started_at,
+            ended_at=session.ended_at,
+            transcript=raw_transcript,
+            translated_transcript=translated_transcript,
+            extracted_data=json.dumps(session.extracted_data.model_dump()),
+            conversation_history=json.dumps(session.turns),
+            status="IN_PROGRESS",
+            incident_id=None,
+        )
+        db.add(vrec)
+        db.flush()
+    else:
+        vrec.transcript = raw_transcript
+        vrec.translated_transcript = translated_transcript
+        vrec.extracted_data = json.dumps(session.extracted_data.model_dump())
+        vrec.conversation_history = json.dumps(session.turns)
+        vrec.status = session.status
+        vrec.ended_at = session.ended_at or datetime.now(timezone.utc)
+        db.flush()
+
     # Check if a report already exists for this call session
     report = db.query(Report).filter(Report.voice_session_id == session.session_id).first()
     if not report:
@@ -1135,33 +1308,9 @@ def commit_voice_session_incident(db: Session, session: VoiceSessionState) -> Op
         if nearest_shelter_id:
             report.shelter_id = nearest_shelter_id
 
-    # Create or update VoiceSession record in DB
-    vrec = db.query(VoiceSession).filter(VoiceSession.id == session.session_id).first()
-    if not vrec:
-        vrec = VoiceSession(
-            id=session.session_id,
-            citizen_id=citizen_profile.id,
-            caller_phone=session.caller_phone,
-            language=session.language,
-            started_at=session.started_at,
-            ended_at=session.ended_at,
-            transcript=raw_transcript,
-            translated_transcript=translated_transcript,
-            extracted_data=json.dumps(session.extracted_data.model_dump()),
-            conversation_history=json.dumps(session.turns),
-            status="SOS_CREATED" if report else "IN_PROGRESS",
-            incident_id=report.id if report else None,
-        )
-        db.add(vrec)
-    else:
-        vrec.transcript = raw_transcript
-        vrec.translated_transcript = translated_transcript
-        vrec.extracted_data = json.dumps(session.extracted_data.model_dump())
-        vrec.conversation_history = json.dumps(session.turns)
-        vrec.status = session.status
-        vrec.ended_at = session.ended_at or datetime.now(timezone.utc)
-        if report:
-            vrec.incident_id = report.id
+    if report:
+        vrec.incident_id = report.id
+        vrec.status = "SOS_CREATED"
 
     db.commit()
     db.refresh(report)

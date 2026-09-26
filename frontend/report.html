@@ -7,7 +7,7 @@
   <meta name="description" content="Submit a citizen flood incident report to the FIRA emergency response system." />
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=2.2" />
 
   <style>
     /* Two-column page grid */
@@ -42,16 +42,17 @@
     #result-card {
       display: none;
       grid-column: 1 / -1;
-      background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(59,130,246,0.08));
-      border: 1px solid rgba(34,197,94,0.25);
+      background: #ffffff;
+      border: 1px solid var(--green-border);
       border-radius: var(--radius); padding: var(--space-lg);
+      box-shadow: var(--shadow-lg);
       animation: fadeIn 0.4s ease;
     }
-    .result-title { font-size: 16px; font-weight: 700; color: var(--low); margin-bottom: 16px; }
+    .result-title { font-size: 17px; font-weight: 800; color: var(--green); margin-bottom: 16px; }
     .result-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-    .result-stat  { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
-    .rs-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 4px; }
-    .rs-value { font-size: 16px; font-weight: 700; }
+    .result-stat  { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+    .rs-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin-bottom: 4px; font-weight: 700; }
+    .rs-value { font-size: 17px; font-weight: 800; color: var(--text); }
     .priority-bar-wrap { margin-top: 16px; }
     .priority-bar-wrap label { font-size: 11px; color: var(--text-muted); }
     .inline-row { display: flex; gap: 12px; }
@@ -73,6 +74,14 @@
 </header>
 
 <div class="page">
+
+  <section class="page-intro">
+    <div>
+      <div class="page-kicker">Citizen reporting</div>
+      <h1>Report a flood incident</h1>
+    </div>
+    <p>Share the essentials so emergency teams can assess risk and coordinate a response quickly.</p>
+  </section>
 
   <!-- Left: Form -->
   <div class="card">
@@ -201,7 +210,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="auth.js"></script>
+<script src="auth.js?v=2.2"></script>
 <script>
   // Enforce citizen login
   const currentUser = window.auth.enforceAuth('citizen');
@@ -230,7 +239,7 @@
     document.getElementById('disp-lng').textContent = `Lng: ${pickedLng}`;
     if (pinMarker) pickMap.removeLayer(pinMarker);
     pinMarker = L.marker([pickedLat, pickedLng], { icon: pinIcon })
-      .bindPopup('<span style="color:#e2e8f0;font-size:12px">Incident location</span>')
+      .bindPopup('<span style="color:var(--text);font-weight:600;font-size:12px">📍 Pinned Incident Location</span>')
       .addTo(pickMap).openPopup();
   });
 

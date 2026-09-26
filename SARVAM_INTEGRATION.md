@@ -1,6 +1,6 @@
 # Sarvam Voice Agent → FIRA SOS
 
-FIRA exposes an authenticated endpoint for Sarvam's Voice Agent API tool. The tool posts the caller's transcript to the existing FIRA voice SOS pipeline; FIRA then extracts emergency details, computes priority, and saves the incident and call session in SQLite.
+FIRA exposes an authenticated endpoint for Sarvam's Voice Agent API tool. The tool posts the caller's transcript to the existing FIRA voice SOS pipeline; FIRA then extracts emergency details, computes priority, and saves the incident and call session in Neon PostgreSQL.
 
 ## 1. Configure the backend secret
 

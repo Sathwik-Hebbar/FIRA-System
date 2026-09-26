@@ -1,7 +1,7 @@
 """
 FIRA – Seed Data Loader.
 Reads seed_zones.json and seed_shelters.json from the data/ directory and
-populates the SQLite database on first run. Also seeds demo users.
+populates the Neon PostgreSQL database on first run. Also seeds demo users.
 
 Usage (standalone):
     python seed_data.py
@@ -77,12 +77,12 @@ def seed_if_empty(db: Session) -> None:
 
 
 def _seed_demo_users(db: Session) -> None:
-    """Create demo citizen and command_center accounts if they don't exist."""
-    demo_users = [
+    """Create default citizen and command_center accounts if they don't exist."""
+    default_users = [
         {
-            "name": "Demo Citizen",
-            "email": "citizen@floodguard.demo",
-            "password": "Demo@123",
+            "name": "Resident Citizen",
+            "email": "citizen@floodguard.org",
+            "password": "Password@123",
             "role": "citizen",
             "phone": "555-0001",
             "latitude": 28.6750,
@@ -90,8 +90,8 @@ def _seed_demo_users(db: Session) -> None:
         },
         {
             "name": "Command Center",
-            "email": "command@floodguard.demo",
-            "password": "Demo@123",
+            "email": "command@floodguard.org",
+            "password": "Password@123",
             "role": "command_center",
             "phone": "555-0002",
             "latitude": None,
@@ -99,8 +99,8 @@ def _seed_demo_users(db: Session) -> None:
         },
         {
             "name": "Ramesh Gowda",
-            "email": "ramesh@fira.demo",
-            "password": "Demo@123",
+            "email": "ramesh@fira.org",
+            "password": "Password@123",
             "role": "citizen",
             "phone": "+91 98765 43210",
             "latitude": 12.9716,
@@ -109,7 +109,7 @@ def _seed_demo_users(db: Session) -> None:
     ]
 
     created = 0
-    for data in demo_users:
+    for data in default_users:
         if not db.query(User).filter(User.email == data["email"]).first():
             user = User(
                 name=data["name"],
@@ -125,9 +125,9 @@ def _seed_demo_users(db: Session) -> None:
 
     if created:
         db.commit()
-        logger.info("Seeded %d demo user(s).", created)
+        logger.info("Seeded %d user account(s).", created)
     else:
-        logger.info("Demo users already present – skipping.")
+        logger.info("Users already present – skipping.")
 
 
 # ---------------------------------------------------------------------------

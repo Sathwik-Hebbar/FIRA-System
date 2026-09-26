@@ -72,8 +72,8 @@ class Report(Base):
 
     # --- Computed / assigned fields ---
     priority_score = Column(Float, nullable=True)         # Set by priority_engine
-    # Canonical incident-processing audit trail. JSON is stored as text to keep
-    # the SQLite MVP migration-free while retaining the complete payload.
+    # Canonical incident-processing audit trail. JSON is stored as text
+    # while retaining the complete payload in Neon PostgreSQL.
     raw_input = Column(String, nullable=True)
     normalized_data = Column(String, nullable=True)
     risk_score = Column(Float, nullable=True)

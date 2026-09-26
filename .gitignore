@@ -26,3 +26,5 @@ backend/.env
 Thumbs.db
 .idea/
 .vscode/
+.neon
+node_modules/

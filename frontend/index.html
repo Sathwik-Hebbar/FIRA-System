@@ -3,55 +3,98 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FIRA – Flood Intelligence &amp; Response Application</title>
-  <meta name="description" content="Real-time flood risk monitoring dashboard. View zone risk levels, shelter locations, and simulate rainfall events." />
+  <title>FIRA – Real-Time Flood Intelligence &amp; Spatial Risk Map</title>
+  <meta name="description" content="Real-time hydrological monitoring and spatial risk intelligence. Track flood risk levels, river basin telemetry, and emergency shelter locations." />
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <!-- Shared FIRA stylesheet -->
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=2.2" />
 
   <style>
-    /* ── index.html page-specific ── */
     html, body { height: 100%; overflow: hidden; }
-    #app       { display: flex; flex-direction: column; height: 100vh; }
+    #app       { display: flex; flex-direction: column; height: calc(100vh - 56px); }
     .content   { display: flex; flex: 1; overflow: hidden; }
-    #map       { flex: 1; }
+    #map       { flex: 1; background: #e2e8f0; }
 
     #sidebar {
-      width: 300px; flex-shrink: 0;
-      background: var(--surface);
+      width: 320px; flex-shrink: 0;
+      background: #ffffff;
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column;
       overflow-y: auto; z-index: 500;
+      box-shadow: 2px 0 12px rgba(15, 23, 42, 0.04);
     }
-    .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border); }
+    .sidebar-section { padding: 18px 20px; border-bottom: 1px solid var(--border); }
     .sidebar-section:last-child { border-bottom: none; flex: 1; }
 
-    #current-risk { display: grid; gap: 8px; }
-    .current-risk-value { font-size: 18px; font-weight: 800; }
+    /* Current Risk Card */
+    #current-risk {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      display: grid; gap: 8px;
+    }
+    .current-risk-value { font-size: 20px; font-weight: 800; }
     .current-risk-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
-    .current-risk-row span:first-child { color: var(--text-muted); }
+    .current-risk-row span:first-child { color: var(--text-muted); font-weight: 500; }
 
-    /* Simulate controls */
-    .simulate-row  { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .delta-row     { display: flex; align-items: center; gap: 8px; }
-    .delta-row label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-    #delta-display { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #60a5fa; width: 40px; text-align: right; }
+    /* Telemetry Station Panel */
+    .telemetry-card {
+      background: var(--accent-subtle);
+      border: 1px solid var(--accent-border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      margin-top: 10px;
+    }
+    .telemetry-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--green);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .telemetry-stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text);
+      margin-top: 4px;
+    }
 
     /* Risk legend */
-    .legend      { display: flex; flex-direction: column; gap: 6px; }
-    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-    .legend-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
+    .legend { display: flex; flex-direction: column; gap: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; color: var(--text); }
+    .legend-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 4px currentColor; }
 
     /* Zone list cards */
-    #zone-list  { display: flex; flex-direction: column; gap: 6px; }
-    .zone-card  { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface2); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 10px; }
-    .zone-card:hover { border-color: var(--border-mid); transform: translateX(2px); }
+    #zone-list { display: flex; flex-direction: column; gap: 8px; }
+    .zone-card {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+    .zone-card:hover {
+      border-color: var(--accent-border);
+      background: var(--surface-hover);
+      transform: translateX(3px);
+      box-shadow: var(--shadow);
+    }
     .zone-card .zc-dot   { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .zone-card .zc-name  { font-size: 12px; font-weight: 500; flex: 1; }
-    .zone-card .zc-score { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
-    .zone-card .zc-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 100px; }
+    .zone-card .zc-name  { font-size: 13px; font-weight: 600; flex: 1; color: var(--text); }
+    .zone-card .zc-score { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+    .zone-card .zc-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; text-transform: uppercase; }
   </style>
 </head>
 <body>
@@ -59,7 +102,7 @@
 
 <div id="loading">
   <div class="spinner"></div>
-  <p>Loading flood intelligence…</p>
+  <p>Loading real-time hydrological intelligence…</p>
 </div>
 
 <div id="app">
@@ -70,8 +113,8 @@
       <div class="brand-name">FI<span>RA</span></div>
     </div>
     <div class="header-actions">
-      <a href="report.html" class="btn btn-danger" id="report-btn">⚠️ Report Incident</a>
-      <button class="btn btn-ghost" id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+      <a href="report.html" class="btn btn-danger" id="report-btn">⚠️ Report Flood Incident</a>
+      <button class="btn btn-ghost" id="refresh-btn" onclick="loadAll()">↻ Sync Telemetry</button>
     </div>
   </header>
 
@@ -79,46 +122,58 @@
     <!-- Sidebar -->
     <div id="sidebar">
 
-      <!-- Simulate Rain -->
-      <div class="sidebar-section ops-only">
-        <div class="section-title">Simulate Rainfall</div>
-        <select id="zone-select">
-          <option value="">Select a zone…</option>
-        </select>
-        <div class="simulate-row">
-          <div class="delta-row">
-            <label>Delta</label>
-            <input type="range" id="delta-slider" min="5" max="100" step="5" value="20" oninput="document.getElementById('delta-display').textContent = this.value + 'mm'" />
-            <span id="delta-display">20mm</span>
+      <section class="workspace-title">
+        <div class="page-kicker">Live operations</div>
+        <h1>Flood risk map</h1>
+        <p>Monitor basin conditions and nearby shelter capacity.</p>
+      </section>
+
+      <!-- Live Hydrological Telemetry Section -->
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>📡 Live Sensor Telemetry</span>
+        </div>
+        <div class="telemetry-card">
+          <div class="telemetry-status">
+            <div class="pulse-dot"></div>
+            Online Stream Active
           </div>
-          <button class="btn btn-rain" id="rain-btn" onclick="simulateRain()">
-            🌧 Simulate Rain Rise
-          </button>
+          <select id="zone-select" onchange="focusZone(this.value)">
+            <option value="">Jump to Monitored Basin…</option>
+          </select>
+          <div class="telemetry-stat-row">
+            <span style="color:var(--text-muted)">Network Provider:</span>
+            <strong>Neon Cloud PG</strong>
+          </div>
+          <div class="telemetry-stat-row">
+            <span style="color:var(--text-muted)">Update Cadence:</span>
+            <strong>Live Sync (5m)</strong>
+          </div>
         </div>
       </div>
 
-      <!-- Current user risk -->
+      <!-- Current location risk -->
       <div class="sidebar-section">
-        <div class="section-title">Current Location</div>
-        <div id="current-risk"><p style="font-size:12px;color:var(--text-muted)">Loading risk…</p></div>
+        <div class="section-title">Localized Threat Assessment</div>
+        <div id="current-risk"><p style="font-size:12px;color:var(--text-muted)">Assessing nearest basin…</p></div>
       </div>
 
       <!-- Legend -->
       <div class="sidebar-section">
-        <div class="section-title">Risk Legend</div>
+        <div class="section-title">Hydrological Alert Levels</div>
         <div class="legend">
-          <div class="legend-item"><div class="legend-dot" style="background:var(--low);color:var(--low)"></div> Low (&lt; 0.35)</div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--moderate);color:var(--moderate)"></div> Moderate (0.35 – 0.59)</div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--high);color:var(--high)"></div> High (0.60 – 0.79)</div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--severe);color:var(--severe)"></div> Severe (≥ 0.80)</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#60a5fa;color:#60a5fa"></div> Shelter</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--low);color:var(--low)"></div> Low Risk (&lt; 0.35)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--moderate);color:var(--moderate)"></div> Moderate Alert (0.35 – 0.59)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--high);color:var(--high)"></div> High Warning (0.60 – 0.79)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--severe);color:var(--severe)"></div> Severe Threat (≥ 0.80)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent);color:var(--accent)"></div> Active Emergency Shelter</div>
         </div>
       </div>
 
       <!-- Zone list -->
       <div class="sidebar-section">
-        <div class="section-title">Zones</div>
-        <div id="zone-list"><p style="font-size:12px;color:var(--text-muted)">Loading…</p></div>
+        <div class="section-title">Monitored Zones &amp; Basins</div>
+        <div id="zone-list"><p style="font-size:12px;color:var(--text-muted)">Loading sensor stations…</p></div>
       </div>
 
     </div>
@@ -132,32 +187,41 @@
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="auth.js"></script>
+<script src="auth.js?v=2.2"></script>
 
 <script>
   // Enforce authentication (any role)
   const _authUser = window.auth.enforceAuth(null);
   if (!_authUser) throw new Error('Not authenticated');
 
+  function fitMapWorkspace() {
+    const navHeight = document.getElementById('nav').getBoundingClientRect().height;
+    document.getElementById('app').style.height = `calc(100vh - ${navHeight}px)`;
+  }
+  fitMapWorkspace();
+
   // ── Map setup ─────────────────────────────────────────────────────────────
-  const map = L.map('map', { zoomControl: false }).setView([28.675, 77.10], 12);
+  const map = L.map('map', { zoomControl: false }).setView([12.9716, 77.5946], 12);
+  window.addEventListener('resize', () => {
+    fitMapWorkspace();
+    map.invalidateSize();
+  });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | FIRA Network',
     maxZoom: 19,
   }).addTo(map);
 
   // ── Colour helpers ────────────────────────────────────────────────────────
   const LEVEL_COLOR = {
-    Low:      '#22c55e',
-    Moderate: '#eab308',
-    High:     '#f97316',
-    Severe:   '#ef4444',
+    Low:      '#059669',
+    Moderate: '#d97706',
+    High:     '#ea580c',
+    Severe:   '#dc2626',
   };
-  const LEVEL_EMOJI = { Low: '🟢', Moderate: '🟡', High: '🟠', Severe: '🔴' };
 
-  function levelColor(level) { return LEVEL_COLOR[level] || '#94a3b8'; }
+  function levelColor(level) { return LEVEL_COLOR[level] || '#059669'; }
 
   // ── Marker layer groups ───────────────────────────────────────────────────
   let zoneLayer = L.layerGroup().addTo(map);
@@ -177,7 +241,19 @@
 
   function renderCurrentRisk() {
     const target = document.getElementById('current-risk');
-    if (!_authUser.latitude || !_authUser.longitude || !zonesCache.length) return;
+    if (!_authUser.latitude || !_authUser.longitude || !zonesCache.length) {
+      if (zonesCache.length) {
+        const topRisk = [...zonesCache].sort((a,b) => b.risk.score - a.risk.score)[0];
+        target.innerHTML = `
+          <div class="current-risk-value" style="color:${levelColor(topRisk.risk.level)}">${topRisk.risk.level} Alert</div>
+          <div class="current-risk-row"><span>Highest Threat Basin</span><strong>${topRisk.zone.name}</strong></div>
+          <div class="current-risk-row"><span>Risk Score</span><strong>${topRisk.risk.score.toFixed(3)}</strong></div>
+          <div class="current-risk-row"><span>Precipitation</span><strong>${topRisk.zone.rainfall_mm} mm</strong></div>
+        `;
+      }
+      return;
+    }
+
     const nearest = zonesCache.reduce((best, item) => {
       const distance = Math.hypot(item.zone.lat - _authUser.latitude, item.zone.lng - _authUser.longitude);
       return !best || distance < best.distance ? { ...item, distance } : best;
@@ -185,18 +261,24 @@
     const color = levelColor(nearest.risk.level);
     const shelter = nearestShelter();
     target.innerHTML = `
-      <div class="current-risk-value" style="color:${color}">${nearest.risk.level}</div>
-      <div class="current-risk-row"><span>Flood Risk</span><strong>${nearest.zone.name}</strong></div>
-      <div class="current-risk-row"><span>Risk Score</span><strong>${nearest.risk.score.toFixed(3)}</strong></div>
-      <div class="current-risk-row"><span>Rainfall</span><strong>${nearest.zone.rainfall_mm} mm</strong></div>
-      <div class="current-risk-row"><span>Warning</span><strong>${nearest.risk.reason}</strong></div>
-      <div class="current-risk-row"><span>Nearest shelter</span><strong>${shelter ? shelter.name : 'No shelter data'}</strong></div>
-      ${shelter ? `<button class="btn btn-ghost" type="button" onclick="showShelter(${shelter.id})">View shelter on map</button>` : ''}`;
+      <div class="current-risk-value" style="color:${color}">${nearest.risk.level} Threat</div>
+      <div class="current-risk-row"><span>Assigned Basin</span><strong>${nearest.zone.name}</strong></div>
+      <div class="current-risk-row"><span>Calculated Index</span><strong>${nearest.risk.score.toFixed(3)}</strong></div>
+      <div class="current-risk-row"><span>Rainfall Rate</span><strong>${nearest.zone.rainfall_mm} mm</strong></div>
+      <div class="current-risk-row"><span>Assessment</span><strong>${nearest.risk.reason}</strong></div>
+      <div class="current-risk-row"><span>Designated Shelter</span><strong>${shelter ? shelter.name : 'Standby'}</strong></div>
+      ${shelter ? `<button class="btn btn-ghost" style="margin-top:6px;width:100%" type="button" onclick="showShelter(${shelter.id})">Locate Nearest Shelter</button>` : ''}`;
   }
 
   function showShelter(id) {
     const shelter = sheltersCache.find(item => item.id === id);
-    if (shelter) map.setView([shelter.lat, shelter.lng], 14);
+    if (shelter) map.setView([shelter.lat, shelter.lng], 15);
+  }
+
+  function focusZone(id) {
+    if (!id) return;
+    const item = zonesCache.find(z => z.zone.id === parseInt(id));
+    if (item) map.setView([item.zone.lat, item.zone.lng], 14);
   }
 
   // ── Toast ─────────────────────────────────────────────────────────────────
@@ -211,19 +293,19 @@
 
   // ── Load zones + risk ─────────────────────────────────────────────────────
   async function loadZones() {
-    const zones = await apiFetch('/zones');
-    const risks = await Promise.all(zones.map(z => apiFetch(`/risk/${z.id}`)));
+    const zones = await window.auth.apiFetch('/zones');
+    const risks = await Promise.all(zones.map(z => window.auth.apiFetch(`/risk/${z.id}`)));
     zonesCache = zones.map((z, i) => ({ zone: z, risk: risks[i] }));
     renderCurrentRisk();
 
     // Populate dropdown
     const sel = document.getElementById('zone-select');
     const currentVal = sel.value;
-    sel.innerHTML = '<option value="">Select a zone…</option>';
+    sel.innerHTML = '<option value="">Jump to Monitored Basin…</option>';
     zonesCache.forEach(({ zone }) => {
       const opt = document.createElement('option');
       opt.value = zone.id;
-      opt.textContent = zone.name;
+      opt.textContent = `${zone.name} (${zone.rainfall_mm}mm)`;
       sel.appendChild(opt);
     });
     sel.value = currentVal;
@@ -239,7 +321,7 @@
         <div class="zc-dot" style="background:${color};box-shadow:0 0 6px ${color}"></div>
         <div class="zc-name">${zone.name}</div>
         <div class="zc-score">${risk.score.toFixed(2)}</div>
-        <div class="zc-badge" style="background:${color}22;color:${color}">${risk.level}</div>
+        <div class="zc-badge" style="background:${color}18;color:${color}">${risk.level}</div>
       `;
       card.onclick = () => map.setView([zone.lat, zone.lng], 14);
       list.appendChild(card);
@@ -250,115 +332,68 @@
     zonesCache.forEach(({ zone, risk }) => {
       const color = levelColor(risk.level);
       const marker = L.circleMarker([zone.lat, zone.lng], {
-        radius: 14,
+        radius: 14 + (risk.score * 12),
         fillColor: color,
-        color: color,
-        fillOpacity: 0.35,
-        weight: 2,
-        opacity: 0.9,
+        color: '#ffffff',
+        weight: 2.5,
+        opacity: 0.95,
+        fillOpacity: 0.75,
       });
 
       marker.bindPopup(`
         <div class="popup-title">${zone.name}</div>
-        <div class="popup-row"><span>Risk Score</span><strong>${risk.score.toFixed(3)}</strong></div>
-        <div class="popup-row"><span>River Level</span><strong>${zone.river_level_m}m</strong> / danger <strong>${zone.danger_level_m}m</strong></div>
-        <div class="popup-row"><span>Rainfall</span><strong>${zone.rainfall_mm} mm</strong></div>
-        <div class="popup-row"><span>Elevation</span><strong>${zone.elevation_m} m</strong></div>
-        <div class="popup-row"><span>Top Factor</span><strong>${risk.reason}</strong></div>
-        <span class="popup-badge" style="background:${color}22;color:${color}">${LEVEL_EMOJI[risk.level]} ${risk.level}</span>
+        <div class="popup-row"><span>Alert Level:</span> <strong style="color:${color}">${risk.level}</strong></div>
+        <div class="popup-row"><span>Risk Score:</span> <strong>${risk.score.toFixed(3)}</strong></div>
+        <div class="popup-row"><span>Current Rainfall:</span> <strong>${zone.rainfall_mm} mm</strong></div>
+        <div class="popup-row"><span>River Level:</span> <strong>${zone.river_level_m}m / ${zone.danger_level_m}m</strong></div>
+        <div class="popup-row"><span>Analysis:</span> <strong>${risk.reason}</strong></div>
       `);
-
-      // Pulse animation via a second transparent ring
-      L.circleMarker([zone.lat, zone.lng], {
-        radius: 20, fillColor: 'transparent',
-        color: color, weight: 1, opacity: 0.25,
-      }).addTo(zoneLayer);
-
-      marker.addTo(zoneLayer);
+      zoneLayer.addLayer(marker);
     });
   }
 
   // ── Load shelters ─────────────────────────────────────────────────────────
   async function loadShelters() {
-    sheltersCache = await apiFetch('/shelters');
+    sheltersCache = await window.auth.apiFetch('/shelters');
     shelterLayer.clearLayers();
-    if (!sheltersCache.length) toast('No shelter locations are available right now.', 'error');
-    renderCurrentRisk();
+
     sheltersCache.forEach(s => {
-      const icon = L.divIcon({
-        html: `<div style="
-          width:28px;height:28px;border-radius:50%;
-          background:rgba(96,165,250,0.25);
-          border:2px solid #60a5fa;
-          display:flex;align-items:center;justify-content:center;
-          font-size:14px;box-shadow:0 0 10px rgba(96,165,250,0.4)
-        ">🏥</div>`,
-        className: '',
+      const shelterIcon = L.divIcon({
+        className: 'shelter-pin',
+        html: `<div style="background:#1d4ed8;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 4px 10px rgba(29,78,216,0.4);border:2px solid #fff">🏠</div>`,
         iconSize: [28, 28],
         iconAnchor: [14, 14],
       });
 
-      L.marker([s.lat, s.lng], { icon })
-        .bindPopup(`
-          <div class="popup-title">🏥 ${s.name}</div>
-          <div class="popup-row"><span>Capacity</span><strong>${s.capacity.toLocaleString()} people</strong></div>
-          <div class="popup-row"><span>Coords</span><strong>${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</strong></div>
-          <span class="popup-badge" style="background:rgba(96,165,250,0.15);color:#60a5fa">Emergency Shelter</span>
-        `)
-        .addTo(shelterLayer);
+      const marker = L.marker([s.lat, s.lng], { icon: shelterIcon });
+      marker.bindPopup(`
+        <div class="popup-title" style="color:#1d4ed8">🏠 ${s.name}</div>
+        <div class="popup-row"><span>Status:</span> <strong style="color:#059669">Operational</strong></div>
+        <div class="popup-row"><span>Capacity:</span> <strong>${s.capacity} Individuals</strong></div>
+        <div class="popup-row"><span>Coordinates:</span> <strong class="mono">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</strong></div>
+      `);
+      shelterLayer.addLayer(marker);
     });
   }
 
-  // ── Load all ──────────────────────────────────────────────────────────────
   async function loadAll() {
     try {
       await Promise.all([loadZones(), loadShelters()]);
     } catch (err) {
-      toast('⚠ Could not reach API — is the backend running?', 'error');
+      toast('⚠ Unable to sync telemetry with Neon cloud database', 'error');
       console.error(err);
-    }
-  }
-
-  // ── Simulate rain ─────────────────────────────────────────────────────────
-  async function simulateRain() {
-    const zoneId = parseInt(document.getElementById('zone-select').value);
-    if (!zoneId) { toast('Please select a zone first', 'error'); return; }
-
-    const delta = parseInt(document.getElementById('delta-slider').value);
-    const btn = document.getElementById('rain-btn');
-    btn.disabled = true;
-    btn.textContent = '…Simulating';
-
-    try {
-      const result = await apiFetch('/simulate-rain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zone_id: zoneId, delta }),
-      });
-      const level = result.risk.level;
-      const color = levelColor(level);
-      toast(`${result.name}: +${delta}mm → ${level} (${result.risk.score.toFixed(3)})`, 'success');
-      await loadZones(); // refresh map with new data
-    } catch (err) {
-      toast(window.auth.errorMessage(err, 'Rainfall simulation is unavailable right now.'), 'error');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '🌧 Simulate Rain Rise';
     }
   }
 
   // ── Boot ──────────────────────────────────────────────────────────────────
   (async () => {
     await loadAll();
-    // Hide loading overlay
     const ov = document.getElementById('loading');
-    ov.classList.add('hidden');
-    setTimeout(() => ov.remove(), 500);
+    if (ov) {
+      ov.classList.add('hidden');
+      setTimeout(() => ov.remove(), 400);
+    }
   })();
-
-  if (_authUser.role === 'citizen') {
-    document.querySelector('.ops-only').style.display = 'none';
-  }
 </script>
 </body>
 </html>
